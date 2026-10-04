@@ -6,6 +6,10 @@
   'use strict';
 
   var form = document.getElementById('pet-form');
+
+  // This file only drives the care form. The sources page has its own module.
+  if (!form) return;
+
   var petTypeSelect = document.getElementById('pet-type');
   var breedInput = document.getElementById('breed');
   var breedList = document.getElementById('breed-list');

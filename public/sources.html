@@ -3,9 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Breed-specific breeders, local shops and online sellers, with ratings and reviews.">
-  <meta name="color-scheme" content="light dark">
-  <title>Pet Sources - Pet Care Guide</title>
+  <title>Where to Get a Dog or Cat: Shelters, Rescues &amp; Sellers | Pet Care Guide</title>
+  <meta name="description" content="Find shelters and rescues first, then verified breeders and sellers near you. Includes buyer warnings for breeder and marketplace listings.">
+  <link rel="canonical" href="https://pet-care-guide.vercel.app/sources.html">
+  <meta name="theme-color" content="#2d6a4f" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0c1f18" media="(prefers-color-scheme: dark)">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Pet Care Guide">
+  <meta property="og:title" content="Where to Get: Shelters, Rescues &amp; Sellers | Pet Care Guide">
+  <meta property="og:description" content="Shelters and rescues first, then verified local and online sellers, with buyer warnings.">
+  <meta property="og:url" content="https://pet-care-guide.vercel.app/sources.html">
+  <meta property="og:image" content="https://pet-care-guide.vercel.app/og-image.svg">
+  <meta property="og:locale" content="en_US">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Where to Get: Shelters, Rescues &amp; Sellers | Pet Care Guide">
+  <meta name="twitter:description" content="Shelters and rescues first, then verified local and online sellers, with buyer warnings.">
+  <meta name="twitter:image" content="https://pet-care-guide.vercel.app/og-image.svg">
+
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -13,6 +30,7 @@
 </head>
 <body>
   <div class="aurora" aria-hidden="true"></div>
+  <a class="skip-link" href="#sources-title">Skip to results</a>
 
   <div class="page-wrapper">
     <div class="container">
@@ -27,7 +45,7 @@
           </svg>
         </div>
         <h1 class="hero-title">Where to Get</h1>
-        <p class="hero-tagline">Breeders, local shops and trusted online sellers</p>
+        <p class="hero-tagline">Shelters and rescues first, then verified sellers</p>
       </header>
 
       <main class="main-content">
@@ -36,9 +54,16 @@
           <div class="breadcrumb">
             <a href="index.html">&larr; Back to Search</a>
           </div>
-          <h2 id="sources-title">Sources for <span id="breed-name"></span> (<span id="pet-type-name"></span>)</h2>
+          <h2 id="sources-title" tabindex="-1">Sources for <span id="breed-name"></span> (<span id="pet-type-name"></span>)</h2>
           <p id="location-display" class="location-display"></p>
-          <p class="sources-disclaimer">Results from web search. Verify details directly with sellers. Adoption is a great option — check local shelters!</p>
+        </div>
+
+        <div class="trader-warning">
+          <strong>Buying from a breeder or marketplace?</strong>
+          <span>Verify the seller before paying. Ask to see the parents, request written health and
+            vaccination records, avoid sellers who will not let you visit, and be wary of puppy-mill
+            listings and payment requests made through chat or wire transfer. Adopting from a shelter or
+            rescue is usually the safer option.</span>
         </div>
 
         <div class="filters-bar">
@@ -46,17 +71,16 @@
             <label for="type-filter">Filter by type</label>
             <select id="type-filter">
               <option value="all">All</option>
-              <option value="local">Local Shops/Breeders</option>
-              <option value="shopping">Online Stores</option>
-              <option value="organic">Web Results</option>
+              <option value="shelter">Shelters &amp; rescues</option>
+              <option value="local">Local sellers</option>
+              <option value="online">Online listings</option>
             </select>
           </div>
           <div class="filter-group">
             <label for="sort-filter">Sort by</label>
             <select id="sort-filter">
-              <option value="relevance">Relevance</option>
-              <option value="rating">Rating (High to Low)</option>
-              <option value="price">Price (Low to High)</option>
+              <option value="recommended">Recommended (shelters first)</option>
+              <option value="rating">Rating (high to low)</option>
             </select>
           </div>
         </div>
@@ -68,10 +92,10 @@
 
         <p id="sources-error" class="sources-error hidden" role="alert"></p>
 
-        <div id="sources-grid" class="sources-grid"></div>
+        <div id="sources-grid" class="sources-grid" aria-live="polite"></div>
 
         <div id="no-results" class="no-results hidden">
-          <p>No sources found. Try a different location or check local shelters.</p>
+          <p>Add a location to see shelters, rescues and sellers near you.</p>
           <a href="index.html" class="btn btn-secondary">New Search</a>
         </div>
 
@@ -93,6 +117,6 @@
 
   <script src="birds.js"></script>
   <script src="ui.js"></script>
-  <script src="script.js"></script>
+  <script src="sources.js"></script>
 </body>
 </html>

@@ -247,5 +247,25 @@ ok('og image file exists', fs.existsSync(path.join(ROOT, 'public', 'og-image.svg
 ok('has viewport', /name="viewport"/.test(html));
 ok('html has lang', /<html lang="en">/.test(html));
 
+/* ------------------------------------------------------- 8. sources page */
+section('Sources page');
+const sourcesHtml = read('public/sources.html');
+const sourcesJs = read('public/sources.js');
+
+ok('sources page does not load the care-form script',
+  !/<script src="script\.js"/.test(sourcesHtml));
+ok('sources page loads its own module', /<script src="sources\.js"/.test(sourcesHtml));
+ok('care form script no-ops without a form', /if \(!form\) return;/.test(script));
+ok('sources page sorts shelters first', /type === 'shelter' \? 0 : 1/.test(sourcesJs));
+ok('sources page carries the buyer warning', /trader-warning/.test(sourcesHtml));
+ok('sources page has shelter filter', /value="shelter"/.test(sourcesHtml));
+ok('sources page announces results', /id="sources-grid"[^>]*aria-live="polite"/.test(sourcesHtml));
+ok('sources page has canonical', /rel="canonical"/.test(sourcesHtml));
+ok('sources page has og:title', /property="og:title"/.test(sourcesHtml));
+ok('sources page has favicon', /rel="icon"/.test(sourcesHtml));
+ok('sources page retry is wired', /id="sources-retry"/.test(sourcesJs));
+[...sourcesHtml.matchAll(/<label for="([^"]+)"/g)]
+  .forEach((m) => ok('sources label[for] -> #' + m[1], sourcesHtml.includes('id="' + m[1] + '"')));
+
 console.log('\n' + (failures ? failures + ' of ' + checks + ' checks FAILED' : 'All ' + checks + ' checks passed'));
 process.exit(failures ? 1 : 0);
