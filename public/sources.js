@@ -165,9 +165,17 @@
       .then(function (result) {
         loading.classList.add('hidden');
         if (!result.ok) {
-          showError(result.status === 429
-            ? 'Source search hit a rate limit. Try again in a minute.'
-            : 'Could not load nearby sources right now.');
+          var code = result.body && result.body.code;
+          if (code === 'sources_not_configured') {
+            showError(result.body.error ||
+              'Seller and shelter lookup is not switched on for this site yet.');
+            return;
+          }
+          if (result.status === 429) {
+            showError('Source search hit a rate limit. Try again in a minute.');
+            return;
+          }
+          showError('Could not load nearby sources right now.');
           return;
         }
         allShops = result.body.shops || [];

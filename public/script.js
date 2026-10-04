@@ -454,6 +454,14 @@ function looksLikeGibberish(value) {
       .then(function (result) {
         sourcesLoading.classList.add('hidden');
         if (!result.ok) {
+          // A deployment without a search key says so plainly instead of
+          // looking like a broken site.
+          if (result.body && result.body.code === 'sources_not_configured') {
+            sourcesError.textContent = result.body.error ||
+              'Seller and shelter lookup is not switched on for this site yet.';
+            sourcesError.classList.remove('hidden');
+            return;
+          }
           showSourcesError(result.status);
           return;
         }

@@ -428,6 +428,27 @@ ok('home page links to the full sources page', /href="\/sources\.html"/.test(htm
 ok('sources link carries the current search', /updateSourcesLink\(\)/.test(script));
 ok('sources browse link has styles', /\.sources-browse\b/.test(css));
 
+// An unconfigured deployment must say so plainly rather than looking broken.
+ok('server reports missing source config with a code',
+  /sources_not_configured/.test(server));
+// Scope to the route body: the provider function is declared earlier in the
+// file, so a whole-file index comparison finds the wrong occurrence.
+const sourcesRoute = (server.slice(server.indexOf("app.post('/api/pet-sources'"))
+  .match(/^[\s\S]*?^\}/m) || [''])[0];
+ok('server checks the source key before calling the provider',
+  sourcesRoute.includes('!process.env.SERPAPI_KEY') &&
+  sourcesRoute.indexOf('!process.env.SERPAPI_KEY') < sourcesRoute.indexOf('searchPetSources(petType, breed'));
+ok('sources page surfaces the unconfigured message', /sources_not_configured/.test(sourcesJs));
+ok('home page surfaces the unconfigured message', /sources_not_configured/.test(script));
+
+// The full sources page and its ordering controls must remain present.
+ok('sources page is a separate page', /id="sources-root"/.test(sourcesHtml) || /sources\.js/.test(sourcesHtml));
+['sort-filter', 'type-filter'].forEach((id) => {
+  ok('sources page has the ' + id + ' control', sourcesHtml.includes('id="' + id + '"'));
+});
+ok('sorting is implemented', /sortFilter\.value/.test(sourcesJs) && /\.sort\(/.test(sourcesJs));
+ok('each result offers a link', /class="source-link"/.test(sourcesJs) && /class="source-link"/.test(script));
+
 // Class names can arrive from JS template strings, so scan every shipped
 // HTML and JS file rather than markup alone.
 const allPublic = [];

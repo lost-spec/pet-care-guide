@@ -322,6 +322,16 @@ app.post('/api/pet-sources', async (req, res) => {
     return res.status(400).json({ error: validationError });
   }
 
+  // Distinguish "this deployment has no search key" from a real outage, so the
+  // page can say so plainly instead of showing a generic server error.
+  if (!process.env.SERPAPI_KEY) {
+    console.error('SERPAPI_KEY is not set; pet sources are unavailable.');
+    return res.status(503).json({
+      error: 'Seller and shelter lookup is not switched on for this site yet. The care guidance above still works.',
+      code: 'sources_not_configured'
+    });
+  }
+
   try {
     const result = await searchPetSources(petType, breed, location || '');
     res.json(result);
