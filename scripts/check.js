@@ -352,29 +352,20 @@ BREED_DIRS.forEach((dir) => {
 section('CSS layout');
 const css = read('public/style.css');
 
-// The unit select inherits a 2.6rem chevron gutter from .select-field select.
-// In a narrow box that hides the text, so it must be overridden.
+// The kg/lb suffix uses the UA arrow. Guard the earlier padding override,
+// which is still needed to undo the floating-label gutter, so the two options
+// stay left-aligned instead of drifting under the arrow.
 const unitRule = (css.match(/\.unit-field select \{[^}]*\}/) || [])[0] || '';
 ok('unit select overrides inherited padding', /\bpadding:/.test(unitRule), unitRule);
-const baseGutter = (css.match(/\.select-field select \{[^}]*\}/) || [])[0] || '';
-const baseRight = (baseGutter.match(/padding:\s*[^;]*?([\d.]+)rem\s+[\d.]+rem/) || [])[1];
-const unitRight = (unitRule.match(/padding:[^;]*?([\d.]+)rem\s+([\d.]+)rem/) || [])[1];
-ok('unit select right padding is smaller than the base chevron gutter',
-  !baseRight || !unitRight || parseFloat(unitRight) < parseFloat(baseRight),
-  'base ' + baseRight + 'rem vs unit ' + unitRight + 'rem');
 ok('unit select is not centred with a large left pad',
   !/text-align:\s*center/.test(unitRule), unitRule);
 
-const column = (css.match(/\.field-group-inline \{[^}]*grid-template-columns:\s*1fr\s+([\d.]+)rem/) || [])[1];
-if (column) {
-  const left = parseFloat((unitRule.match(/padding:[^;]*?[\d.]+rem\s+([\d.]+)rem/) || [])[1] || '0.6');
-  const right = parseFloat(unitRight || '1.45');
-  const contentRem = parseFloat(column) - left - right;
-  ok('unit box leaves room for "kg" at 0.95rem', contentRem > 1.2,
-    'column ' + column + 'rem minus ' + left + 'rem + ' + right + 'rem = ' + contentRem.toFixed(2) + 'rem');
-} else {
-  ok('unit column width is declared', false);
-}
+// Whether the arrow overlaps the option text is no longer a function of column
+// width and padding, so there is nothing left to compute here: the UA reserves
+// the space. Padding arithmetic only produced a false sense of safety before.
+ok('the weight row uses a fixed unit column',
+  /\.tracker-weight \{ grid-template-columns: 1fr 5\.75rem; \}/.test(css) ||
+  /\.field-group-inline \{[^}]*grid-template-columns:\s*1fr\s+[\d.]+rem/.test(css));
 
 ok('inputs stay at 16px or larger',
   /\.field input,\s*[\s\S]{0,80}font-size:\s*1rem/.test(css));
@@ -578,13 +569,27 @@ ok('tracker captures a daily calorie target', /id="pet-calorie-target"/.test(tra
 ok('tracker captures weight', /id="entry-weight"/.test(trackerHtml));
 ok('tracker lets you pick a past date', /id="entry-date"[^>]*type="date"|type="date"[^>]*id="entry-date"/.test(trackerHtml));
 
-// The kg/lb control must not be squeezed into its own chevron.
-ok('the unit column keeps a fixed width',
-  /\.tracker-weight \{ grid-template-columns: 1fr 5\.75rem; \}/.test(css),
-  'an auto column lets the box shrink onto the chevron');
-ok('the unit select leaves room for the chevron',
-  /\.unit-field select \{[^}]*padding: 0\.7rem 1\.55rem/.test(css));
+// The kg/lb control used to carry the shared absolutely-positioned chevron,
+// which can land on top of the option text at narrow widths and while the
+// option list is open. It now relies on the UA's own arrow, which reserves its
+// own space, so the arrow and the text cannot collide.
+const unitChevronRule = (css.match(/\.unit-field select \{[^}]*\}/) || [])[0] || '';
+ok('the unit select keeps the UA arrow so nothing can overlap it',
+  /appearance:\s*auto/.test(unitChevronRule) && /-webkit-appearance:\s*auto/.test(unitChevronRule),
+  unitChevronRule);
+ok('the custom chevron is suppressed inside the unit field',
+  /\.unit-field \.select-chevron \{ display: none; \}/.test(css));
 ok('the unit field cannot collapse', /\.unit-field \{ min-width: 0; \}/.test(css));
+ok('unit select is not centred with a large left pad',
+  !/text-align:\s*center/.test(unitChevronRule), unitChevronRule);
+
+// Neither page may reintroduce a chevron inside the unit field.
+const unitBlocks = [html, trackerHtml].map((h) =>
+  (h.match(/<div class="field select-field unit-field"[^]*?<\/div>/) || [])[0] || '');
+ok('the home unit field has no chevron markup',
+  unitBlocks[0] && !/select-chevron/.test(unitBlocks[0]), unitBlocks[0]);
+ok('the tracker unit field has no chevron markup',
+  unitBlocks[1] && !/select-chevron/.test(unitBlocks[1]), unitBlocks[1]);
 
 // A disabled button that still looks clickable is indistinguishable from one
 // that is stuck, so disabled needs to be visible.

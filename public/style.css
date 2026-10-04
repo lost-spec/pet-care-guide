@@ -1601,17 +1601,21 @@ a.btn { text-decoration: none; }
   align-items: center;
 }
 
-/* Override the 2.6rem chevron gutter inherited from .select-field select,
-   which squeezed "kg" out of the box entirely. */
+/* The kg/lb suffix deliberately uses the browser's own select arrow.
+   The shared .select-chevron is absolutely positioned over the control, so it
+   can sit on top of the option text at narrow widths and while the option list
+   is open. The UA reserves space for its own arrow, so the two cannot collide
+   at any width, font size or zoom level. */
 .unit-field select {
-  padding: 0.7rem 1.55rem 0.7rem 0.65rem;
+  appearance: auto;
+  -webkit-appearance: auto;
+  padding: 0.65rem 0.4rem;
   font-size: 0.95rem;
   font-weight: 600;
   text-align: left;
 }
 
-.unit-field .select-chevron { right: 0.4rem; }
-.unit-field .select-chevron svg { width: 0.85rem; height: 0.85rem; }
+.unit-field .select-chevron { display: none; }
 
 /* Loading skeleton for the guidance area */
 .results-loading { display: grid; gap: 1rem; }
