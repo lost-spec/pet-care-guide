@@ -54,7 +54,7 @@ async function callAI(petType, breed, retry = false) {
       'X-Title': 'Pet Care Guide'
     },
     body: JSON.stringify({
-      model: 'openai/gpt-4o-mini',
+      model: 'nvidia/nemotron-3-ultra',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: `Pet type: ${petType}, Breed: ${breed}` }
