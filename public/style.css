@@ -466,6 +466,16 @@ a.btn-secondary { text-decoration: none; }
   border: 1px solid var(--hairline);
   box-shadow: var(--shadow-sm);
 }
+
+/* A disabled button must not look clickable. Only .pagination had disabled
+   styling for .btn-secondary, so elsewhere clicking did nothing at all with no
+   feedback, which reads as the button being stuck. */
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
 .btn-secondary::before { display: none; }
 .btn-secondary:hover:not(:disabled) {
   color: var(--on-accent);
@@ -752,7 +762,11 @@ a.btn-secondary { text-decoration: none; }
 
 .tracker-day-hint { margin: 0 0 0.55rem; }
 
-.tracker-weight { grid-template-columns: 1fr auto; }
+/* The unit column stays a fixed width. An `auto` column lets the box shrink to
+   its intrinsic width, which squeezes "kg" into the chevron. */
+.tracker-weight { grid-template-columns: 1fr 5.75rem; }
+
+.unit-field { min-width: 0; }
 
 .tracker-summary {
   margin: 1rem 0 0;
@@ -876,6 +890,126 @@ a.btn-secondary { text-decoration: none; }
 }
 
 .tracker-notes { margin-top: 1.2rem; }
+
+/* ------------------------------------------------------------ AI review */
+
+.tracker-review { margin-top: 1.3rem; }
+
+.tracker-review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem 1rem;
+}
+
+.tracker-review-hint {
+  margin: 0;
+  flex: 1 1 14rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.tracker-review-result {
+  margin-top: 1rem;
+  padding: 1rem 1.1rem;
+  background: var(--surface-strong);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+}
+
+.tracker-verdict-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.8rem;
+}
+
+.tracker-verdict {
+  display: inline-block;
+  padding: 0.24rem 0.7rem;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
+.tracker-verdict-good {
+  color: var(--green-900);
+  background: rgba(64, 145, 108, 0.16);
+}
+
+.tracker-verdict-watch {
+  color: #7a4c05;
+  background: rgba(224, 168, 52, 0.22);
+}
+
+.tracker-verdict-concern {
+  color: #8c2f16;
+  background: rgba(226, 114, 91, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tracker-verdict-good { color: #b6e3c9; }
+  .tracker-verdict-watch { color: #f2cf94; }
+  .tracker-verdict-concern { color: #ffb4a2; }
+}
+
+.tracker-review-headline {
+  margin: 0;
+  flex: 1 1 16rem;
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.tracker-review-lists {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+
+.tracker-review-block-title {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tracker-review-block ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--text-body);
+}
+
+.review-good .tracker-review-block-title { color: var(--accent-strong); }
+.review-concern .tracker-review-block-title { color: var(--coral-500); }
+.review-tip .tracker-review-block-title { color: var(--text-muted); }
+
+.tracker-review-vet {
+  margin: 0.9rem 0 0;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.89rem;
+  line-height: 1.55;
+  color: var(--text-strong);
+  background: rgba(226, 114, 91, 0.12);
+  border-left: 3px solid var(--coral-500);
+  border-radius: var(--radius-sm);
+}
+
+.tracker-review-foot {
+  margin: 0.9rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
 
 .tracker-notes-label {
   display: block;
@@ -1470,14 +1604,14 @@ a.btn { text-decoration: none; }
 /* Override the 2.6rem chevron gutter inherited from .select-field select,
    which squeezed "kg" out of the box entirely. */
 .unit-field select {
-  padding: 0.7rem 1.45rem 0.7rem 0.6rem;
+  padding: 0.7rem 1.55rem 0.7rem 0.65rem;
   font-size: 0.95rem;
   font-weight: 600;
   text-align: left;
 }
 
-.unit-field .select-chevron { right: 0.45rem; }
-.unit-field .select-chevron svg { width: 0.9rem; height: 0.9rem; }
+.unit-field .select-chevron { right: 0.4rem; }
+.unit-field .select-chevron svg { width: 0.85rem; height: 0.85rem; }
 
 /* Loading skeleton for the guidance area */
 .results-loading { display: grid; gap: 1rem; }

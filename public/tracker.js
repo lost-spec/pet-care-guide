@@ -364,6 +364,157 @@
     fillProfileSummary();
   }
 
+  // "Clear this day" is only meaningful once the day has something in it. This
+  // has to be refreshed after every save, not just when loading a day, or the
+  // button stays disabled after the first tick and never becomes clickable.
+  function updateClearButton() {
+    var has = !!state.entries[activeDate];
+    el.clearDay.disabled = !has;
+    el.clearDay.title = has ? '' : 'Nothing logged on this day yet';
+  }
+
+  /* ------------------------------------------------------------ AI review */
+
+  // Only reviewed when something was actually logged, so the button cannot ask
+  // the model to review an empty day.
+  function reviewPayload() {
+    var petType = state.profile.petType;
+    var entry = state.entries[activeDate];
+    if (!entry || !entryTouched(entry, petType)) return null;
+
+    return {
+      petType: petType,
+      breed: state.profile.breed,
+      ageStage: state.profile.ageStage,
+      diet: state.profile.diet,
+      calorieTarget: state.profile.calorieTarget,
+      date: activeDate,
+      calories: entry.calories,
+      minutes: entry.minutes,
+      weight: entry.weight,
+      weightUnit: entry.weightUnit,
+      notes: entry.notes,
+      routine: routineFor(petType).map(function (item) {
+        return { label: item.label, done: entry[item.key] === true };
+      }),
+      week: {
+        fedDays: countDays(roleKey(petType, 'food')),
+        activeDays: countDays(roleKey(petType, 'activity')),
+        avgCalories: calorieAverage(),
+        streak: fedStreak(petType)
+      }
+    };
+  }
+
+  function countDays(key) {
+    if (!key) return 0;
+    var today = todayIso();
+    var total = 0;
+    for (var i = 0; i < 7; i++) {
+      var entry = state.entries[shiftIso(today, -i)];
+      if (entry && entry[key] === true) total++;
+    }
+    return total;
+  }
+
+  var VERDICT_TEXT = { good: 'Looks good', watch: 'Worth watching', concern: 'Needs attention' };
+
+  function renderReview(data) {
+    if (!data || typeof data !== 'object') return;
+
+    el.reviewVerdict.textContent = VERDICT_TEXT[data.verdict] || VERDICT_TEXT.watch;
+    el.reviewVerdict.className = 'tracker-verdict tracker-verdict-' +
+      (VERDICT_TEXT[data.verdict] ? data.verdict : 'watch');
+    el.reviewHeadline.textContent = data.headline || '';
+
+    var lists = el.reviewLists;
+    lists.innerHTML = '';
+    [
+      { title: 'Going well', items: data.positives, cls: 'review-good' },
+      { title: 'Keep an eye on', items: data.concerns, cls: 'review-concern' },
+      { title: 'Suggestions', items: data.tips, cls: 'review-tip' }
+    ].forEach(function (group) {
+      if (!Array.isArray(group.items) || !group.items.length) return;
+      var block = document.createElement('div');
+      block.className = 'tracker-review-block ' + group.cls;
+
+      var heading = document.createElement('h3');
+      heading.className = 'tracker-review-block-title';
+      heading.textContent = group.title;
+
+      var list = document.createElement('ul');
+      group.items.forEach(function (item) {
+        var li = document.createElement('li');
+        // textContent, never innerHTML: this is model output.
+        li.textContent = String(item);
+        list.appendChild(li);
+      });
+
+      block.appendChild(heading);
+      block.appendChild(list);
+      lists.appendChild(block);
+    });
+
+    if (data.vetNote) {
+      el.reviewVet.textContent = data.vetNote;
+      setShown(el.reviewVet, true);
+    } else {
+      setShown(el.reviewVet, false);
+    }
+
+    setShown(el.reviewResult, true);
+  }
+
+  function describeReviewError(status, body) {
+    if (status === 503 && body && body.code === 'ai_not_configured') {
+      return 'Reviews need the AI key to be set on the server, so this is unavailable right now.';
+    }
+    if (status === 429) return 'The AI is rate limiting us. Wait a moment and try again.';
+    if (status === 400) return 'That day could not be read: ' + ((body && body.error) || 'bad request');
+    return 'Could not review this day. Please try again.';
+  }
+
+  function requestReview() {
+    // Save first so the review sees what is on screen.
+    persist();
+
+    var payload = reviewPayload();
+    if (!payload) {
+      el.reviewStatus.textContent = 'Tick something or add a number first, then ask for a review.';
+      return;
+    }
+
+    el.reviewBtn.disabled = true;
+    el.reviewBtn.textContent = 'Reviewing\u2026';
+    el.reviewStatus.textContent = '';
+    setShown(el.reviewResult, false);
+
+    fetch('/api/tracker-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) {
+        return res.json()
+          .catch(function () { return {}; })
+          .then(function (body) { return { ok: res.ok, status: res.status, body: body }; });
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          el.reviewStatus.textContent = describeReviewError(result.status, result.body);
+          return;
+        }
+        renderReview(result.body);
+      })
+      .catch(function () {
+        el.reviewStatus.textContent = 'Could not reach the server. Check your connection and try again.';
+      })
+      .then(function () {
+        el.reviewBtn.disabled = false;
+        el.reviewBtn.textContent = 'Ask for a review of this day';
+      });
+  }
+
   function fillDay(iso) {
     var entry = entryFor(iso) || blankEntry();
     var boxes = el.checklist.querySelectorAll('input[type="checkbox"]');
@@ -378,7 +529,7 @@
 
     var relative = relativeDay(iso);
     el.dayHint.textContent = relative || labelFor(iso);
-    el.clearDay.disabled = !entryFor(iso);
+    updateClearButton();
   }
 
   function collectDay() {
@@ -497,6 +648,7 @@
     }
     saveStatus();
     renderWeek();
+    updateClearButton();
   }
 
   function populateTypes() {
@@ -532,6 +684,9 @@
   function openDay(iso) {
     activeDate = iso;
     el.date.value = iso;
+    // A review belongs to one day, so it must not linger over another date.
+    setShown(el.reviewResult, false);
+    el.reviewStatus.textContent = '';
     fillDay(iso);
     renderWeek();
   }
@@ -574,6 +729,7 @@
 
     el.clearDay.addEventListener('click', clearDay);
     el.clearAll.addEventListener('click', clearAll);
+    el.reviewBtn.addEventListener('click', requestReview);
 
     el.weekStrip.addEventListener('click', function (event) {
       var button = event.target.closest ? event.target.closest('.week-cell') : null;
@@ -613,6 +769,13 @@
       notes: document.getElementById('entry-notes'),
       clearDay: document.getElementById('clear-day-btn'),
       clearAll: document.getElementById('clear-all-btn'),
+      reviewBtn: document.getElementById('review-btn'),
+      reviewStatus: document.getElementById('review-status'),
+      reviewResult: document.getElementById('review-result'),
+      reviewVerdict: document.getElementById('review-verdict'),
+      reviewHeadline: document.getElementById('review-headline'),
+      reviewLists: document.getElementById('review-lists'),
+      reviewVet: document.getElementById('review-vet'),
       weekStrip: document.getElementById('week-strip'),
       weekEmpty: document.getElementById('week-empty'),
       weekStats: document.getElementById('week-stats'),

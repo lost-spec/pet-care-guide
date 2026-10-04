@@ -98,14 +98,21 @@ function buildContextLine({ petType, breed, ageStage, weight, weightUnit }) {
   return parts.join(', ');
 }
 
-async function callAI(context, retry = false) {
+async function callAI(context, retry = false, options = {}) {
+  const systemPrompt = options.systemPrompt || SYSTEM_PROMPT;
+  const userContent = options.userContent || buildContextLine(context);
+  const temperature = options.temperature != null ? options.temperature : 0.3;
+  const maxTokens = options.maxTokens || 1400;
   const baseUrl = process.env.LLM_BASE_URL || 'https://api.groq.com/openai/v1';
   const apiKey = process.env.LLM_API_KEY;
   const model = process.env.LLM_MODEL || 'openai/gpt-oss-120b';
   const extraHeaders = process.env.LLM_EXTRA_HEADERS ? JSON.parse(process.env.LLM_EXTRA_HEADERS) : {};
 
   if (!apiKey) {
-    throw new Error('LLM_API_KEY environment variable is not set. Add it in Vercel Settings → Environment Variables.');
+    const err = new Error('LLM_API_KEY environment variable is not set. Add it in Vercel Settings → Environment Variables.');
+    err.status = 503;
+    err.code = 'ai_not_configured';
+    throw err;
   }
 
   const headers = {
@@ -122,11 +129,11 @@ async function callAI(context, retry = false) {
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: buildContextLine(context) }
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent }
         ],
-        temperature: 0.3,
-        max_tokens: 1400
+        temperature,
+        max_tokens: maxTokens
       })
     });
   } catch (fetchError) {
@@ -167,7 +174,8 @@ async function callAI(context, retry = false) {
       err.status = 502;
       throw err;
     }
-    return callAI(context, true);
+    // Pass the same prompts through, or a retry silently re-asks the other task.
+    return callAI(context, true, options);
   }
 }
 
@@ -190,6 +198,165 @@ app.post('/api/pet-info', async (req, res) => {
   } catch (error) {
     console.error('Error:', error.message);
     res.status(error.status || 500).json({ error: error.message || 'Failed to get pet care info. Please try again.' });
+  }
+});
+
+/* ------------------------------------------------------- tracker review */
+
+const REVIEW_SYSTEM_PROMPT = `You are a pet care expert reviewing one day of a pet owner's own care log.
+
+You are given the pet's species, breed, life stage, their usual diet, the items they ticked as done today, the calories and exercise recorded today, their weight, their own notes, and a 7 day summary.
+
+Respond with ONLY valid JSON, no markdown, no extra text, in exactly this shape:
+{
+  "verdict": "good" | "watch" | "concern",
+  "headline": "one short sentence, max 90 characters",
+  "positives": ["1 to 3 short things that went well"],
+  "concerns": ["0 to 3 genuine concerns, empty if none"],
+  "tips": ["1 to 3 concrete, practical suggestions"],
+  "vetNote": "only when something genuinely needs a vet; otherwise an empty string"
+}
+
+Rules:
+- Use "good" when the day looks unremarkable and appropriate.
+- Use "watch" when something is worth keeping an eye on but is not urgent.
+- Use "concern" only for something that could harm the animal if it continues.
+- Judge the day against what is normal for that species, breed and life stage.
+- Never invent numbers. If calories are missing, work around it rather than guessing a figure.
+- Be concrete and calm. No scolding, no dramatics, no emoji.
+- You are not a vet. Anything medical goes in "vetNote".
+- Respect the animal's species. A fish tank has no walk and a rabbit does not need pellets as a main meal.`;
+
+const SPECIES = [
+  'Dog', 'Cat', 'Rabbit', 'Hamster', 'Guinea Pig',
+  'Bird', 'Fish', 'Reptile', 'Horse'
+];
+
+// Everything the log can contain is user input, so cap it hard before it is
+// placed in a prompt or echoed back.
+function clampText(value, max) {
+  if (value == null) return '';
+  return String(value).replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function clampNumber(value, min, max) {
+  if (value === '' || value == null) return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  return Math.min(max, Math.max(min, num));
+}
+
+function validateReview(body) {
+  if (!body || typeof body !== 'object') return 'Request body must be an object';
+  if (!SPECIES.includes(body.petType)) return 'Unknown petType';
+  if (typeof body.petType !== 'string') return 'petType must be a string';
+
+  if (body.routine != null && !Array.isArray(body.routine)) return 'routine must be an array';
+  if (Array.isArray(body.routine) && body.routine.length > 12) return 'routine has too many items';
+
+  return null;
+}
+
+function buildReviewContext(body) {
+  const lines = [`Pet type: ${body.petType}`];
+
+  if (body.breed) lines.push(`Breed: ${clampText(body.breed, 60)}`);
+  if (body.ageStage) lines.push(`Life stage: ${clampText(body.ageStage, 60)}`);
+  if (body.diet) lines.push(`Usual diet: ${clampText(body.diet, 200)}`);
+
+  const target = clampNumber(body.calorieTarget, 0, 5000);
+  if (target) lines.push(`Daily calorie target: ${target} kcal`);
+
+  if (body.date) lines.push(`Date logged: ${clampText(body.date, 10)}`);
+
+  lines.push('Done today:');
+  const items = Array.isArray(body.routine) ? body.routine.slice(0, 12) : [];
+  if (items.length) {
+    items.forEach((item) => {
+      const label = clampText(item && item.label, 80);
+      if (label) lines.push(`- ${label}: ${item && item.done ? 'yes' : 'no'}`);
+    });
+  } else {
+    lines.push('- nothing ticked');
+  }
+
+  const calories = clampNumber(body.calories, 0, 5000);
+  if (calories != null) lines.push(`Calories recorded today: ${calories} kcal`);
+
+  const minutes = clampNumber(body.minutes, 0, 600);
+  if (minutes != null) lines.push(`Exercise recorded today: ${minutes} minutes`);
+
+  const weight = clampNumber(body.weight, 0, 2000);
+  if (weight != null) {
+    const kg = toKg(weight, body.weightUnit);
+    const unit = body.weightUnit === 'lb' ? 'lb' : 'kg';
+    lines.push(`Weight recorded today: ${weight} ${unit}${unit === 'lb' && kg != null ? ` (~${kg} kg)` : ''}`);
+  }
+
+  if (body.notes) lines.push(`Owner's notes: ${clampText(body.notes, 400)}`);
+
+  const week = body.week && typeof body.week === 'object' ? body.week : null;
+  if (week) {
+    const bits = [];
+    const fed = clampNumber(week.fedDays, 0, 7);
+    const active = clampNumber(week.activeDays, 0, 7);
+    const avg = clampNumber(week.avgCalories, 0, 5000);
+    const streak = clampNumber(week.streak, 0, 400);
+    if (fed != null) bits.push(`${fed} of the last 7 days fed`);
+    if (active != null) bits.push(`${active} active`);
+    if (avg != null) bits.push(`averaging ${avg} kcal per logged day`);
+    if (streak != null) bits.push(`current fed streak ${streak} day(s)`);
+    if (bits.length) lines.push(`Last 7 days: ${bits.join(', ')}`);
+  }
+
+  return lines.join('\n');
+}
+
+// The model is not trusted to return the shape we asked for, so normalise
+// before it reaches the page rather than trusting the JSON blindly.
+function normaliseReview(result) {
+  const source = result && typeof result === 'object' ? result : {};
+  const verdict = ['good', 'watch', 'concern'].includes(source.verdict) ? source.verdict : 'watch';
+
+  const list = (value, max) => (Array.isArray(value)
+    ? value
+      .map((item) => clampText(item, 220))
+      .filter(Boolean)
+      .slice(0, max)
+    : []);
+
+  return {
+    verdict,
+    headline: clampText(source.headline, 140) || 'Review of the day you logged.',
+    positives: list(source.positives, 3),
+    concerns: list(source.concerns, 3),
+    tips: list(source.tips, 3),
+    vetNote: clampText(source.vetNote, 300)
+  };
+}
+
+app.post('/api/tracker-review', async (req, res) => {
+  const validationError = validateReview(req.body);
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
+
+  try {
+    const result = await callAI(req.body, false, {
+      systemPrompt: REVIEW_SYSTEM_PROMPT,
+      userContent: buildReviewContext(req.body),
+      temperature: 0.4,
+      maxTokens: 900
+    });
+
+    res.json(normaliseReview(result));
+  } catch (error) {
+    console.error('Tracker review error:', error.message);
+    const status = error.status || 500;
+    res.status(status).json({
+      error: error.message || 'Could not review this day. Please try again.',
+      code: error.code
+    });
   }
 });
 

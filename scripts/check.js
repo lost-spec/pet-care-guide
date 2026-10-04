@@ -578,6 +578,49 @@ ok('tracker captures a daily calorie target', /id="pet-calorie-target"/.test(tra
 ok('tracker captures weight', /id="entry-weight"/.test(trackerHtml));
 ok('tracker lets you pick a past date', /id="entry-date"[^>]*type="date"|type="date"[^>]*id="entry-date"/.test(trackerHtml));
 
+// The kg/lb control must not be squeezed into its own chevron.
+ok('the unit column keeps a fixed width',
+  /\.tracker-weight \{ grid-template-columns: 1fr 5\.75rem; \}/.test(css),
+  'an auto column lets the box shrink onto the chevron');
+ok('the unit select leaves room for the chevron',
+  /\.unit-field select \{[^}]*padding: 0\.7rem 1\.55rem/.test(css));
+ok('the unit field cannot collapse', /\.unit-field \{ min-width: 0; \}/.test(css));
+
+// A disabled button that still looks clickable is indistinguishable from one
+// that is stuck, so disabled needs to be visible.
+ok('disabled buttons are visibly disabled', /\.btn:disabled \{[^}]*opacity/.test(css));
+ok('disabled buttons do not show the progress cursor',
+  /\.btn:disabled \{[^}]*cursor: not-allowed/.test(css));
+ok('the clear button is refreshed after saving',
+  /function updateClearButton/.test(trackerJs) && /updateClearButton\(\);/.test(trackerJs));
+ok('the clear button is updated on save, not only on load',
+  /saveStatus\(\);\s*renderWeek\(\);\s*updateClearButton\(\);/.test(trackerJs),
+  'a tick must enable the clear button immediately');
+ok('a disabled clear button explains itself',
+  /Nothing logged on this day yet/.test(trackerJs));
+
+// AI review of the logged day.
+ok('there is a review button', /id="review-btn"/.test(trackerHtml));
+ok('there is a review result region', /id="review-result"/.test(trackerHtml));
+ok('the review shows a verdict', /id="review-verdict"/.test(trackerHtml));
+ok('the review posts to the review endpoint', /fetch\('\/api\/tracker-review'/.test(trackerJs));
+ok('the review saves before reading the day',
+  /function requestReview\(\) \{[\s\S]{0,120}?persist\(\);/.test(trackerJs));
+ok('the review refuses an empty day', /if \(!payload\) \{/.test(trackerJs));
+ok('the review sends the routine with tick state',
+  /routine: routineFor\(petType\)\.map/.test(trackerJs) && /done: entry\[item\.key\] === true/.test(trackerJs));
+ok('the review sends the weekly summary',
+  /fedDays: countDays/.test(trackerJs) && /avgCalories: calorieAverage\(\)/.test(trackerJs));
+ok('the review resets when the date changes',
+  /function openDay\(iso\)[\s\S]{0,320}setShown\(el\.reviewResult, false\)/.test(trackerJs));
+ok('the review explains a missing AI key',
+  /ai_not_configured/.test(trackerJs) && /Reviews need the AI key/.test(trackerJs));
+ok('the review explains rate limiting', /status === 429/.test(trackerJs));
+ok('review output is never treated as HTML',
+  /li\.textContent = String\(item\)/.test(trackerJs) && !/reviewLists\.innerHTML = [^;]*\+/s.test(trackerJs));
+ok('review styling exists', /\.tracker-verdict-good \{/.test(css));
+ok('the review is caveated as not a diagnosis', /not a diagnosis/.test(trackerHtml));
+
 // Storage is local and the user is told so.
 ok('tracker uses localStorage', /localStorage/.test(trackerJs));
 ok('tracker says data stays in the browser', /browser only|blocking local storage/.test(trackerHtml + trackerJs));
@@ -745,6 +788,94 @@ ok('date maths crosses a leap day', Tracker.shiftIso('2024-03-01', -1) === '2024
 ok('date maths formats with padding', Tracker.toIso(new Date(2026, 0, 5)) === '2026-01-05',
   Tracker.toIso(new Date(2026, 0, 5)));
 ok('date maths rejects rubbish input', Tracker.shiftIso('nope', -1) === '');
+
+/* ------------------------------------------------------ 14. tracker review */
+section('Tracker review endpoint');
+
+ok('there is a tracker review route', /app\.post\('\/api\/tracker-review'/.test(server));
+ok('the review route is not the sources route', !/app\.post\('\/api\/tracker-review[\s\S]{0,40}serpapi/i.test(server));
+
+// The review prompt must ask for the shape the page actually reads.
+const reviewPrompt = (server.match(/const REVIEW_SYSTEM_PROMPT = `([\s\S]*?)`;/) || [])[1] || '';
+ok('the review prompt exists', reviewPrompt.length > 100, reviewPrompt.length + ' chars');
+['verdict', 'headline', 'positives', 'concerns', 'tips', 'vetNote'].forEach((field) => {
+  ok('the review prompt asks for "' + field + '"', reviewPrompt.includes(field));
+});
+ok('the review prompt demands JSON only', /ONLY valid JSON/.test(reviewPrompt));
+ok('the review prompt caps the headline', /max 90 characters/.test(reviewPrompt));
+ok('the review prompt forbids inventing numbers', /Never invent numbers/.test(reviewPrompt));
+ok('the review prompt says it is not a vet', /not a vet/.test(reviewPrompt));
+ok('the review prompt is species aware', /fish tank has no walk/i.test(reviewPrompt));
+
+// Validation must reject junk before it reaches a prompt.
+const Validation = (() => {
+  const src = server.match(/(function validateReview[\s\S]*?\n}\n)/);
+  const clamp = server.match(/(function clampText[\s\S]*?\n}\n)/);
+  const clampNum = server.match(/(function clampNumber[\s\S]*?\n}\n)/);
+  const normalise = server.match(/(function normaliseReview[\s\S]*?\n}\n)/);
+  if (!src) return null;
+  const ctx = {
+    SPECIES: ['Dog', 'Cat', 'Rabbit', 'Hamster', 'Guinea Pig', 'Bird', 'Fish', 'Reptile', 'Horse'],
+    clampText: undefined, clampNumber: undefined
+  };
+  vm.createContext(ctx);
+  if (clamp) vm.runInContext(clamp[1], ctx);
+  if (clampNum) vm.runInContext(clampNum[1], ctx);
+  vm.runInContext(src[1], ctx);
+  if (normalise) vm.runInContext(normalise[1], ctx);
+  return ctx;
+})();
+
+if (Validation) {
+  ok('an unknown species is rejected', Validation.validateReview({ petType: 'Dragon' }) !== null);
+  ok('a missing species is rejected', Validation.validateReview({}) !== null);
+  ok('a known species is accepted', Validation.validateReview({ petType: 'Dog' }) === null,
+    Validation.validateReview({ petType: 'Dog' }));
+  ok('a non-array routine is rejected',
+    Validation.validateReview({ petType: 'Dog', routine: 'fed' }) !== null);
+  ok('an oversized routine is rejected',
+  Validation.validateReview({ petType: 'Dog', routine: new Array(13).fill({ label: 'x' }) }) !== null);
+
+  // A hand-edited response must not be able to inject markup or overflow fields.
+  const messy = Validation.normaliseReview({
+    verdict: 'excellent',
+    headline: 'x'.repeat(400),
+    positives: ['good', '', 'also good', 'a'.repeat(400), 'extra1', 'extra2', 'extra3', 'extra4'],
+    concerns: 'not an array',
+    tips: null,
+    vetNote: 12345
+  });
+  ok('an unknown verdict falls back to watch', messy.verdict === 'watch', messy.verdict);
+  ok('a known verdict is kept', Validation.normaliseReview({ verdict: 'concern' }).verdict === 'concern');
+  ok('a long headline is capped', messy.headline.length <= 140, messy.headline.length + ' chars');
+  ok('empty positives are dropped', messy.positives.indexOf('') === -1);
+  ok('positives are capped at three', messy.positives.length === 3, messy.positives.length + '');
+  ok('a long positive is capped', messy.positives.every((p) => p.length <= 220));
+  ok('a non-array concerns field becomes a list', Array.isArray(messy.concerns));
+  ok('null tips become a list', Array.isArray(messy.tips));
+  ok('a numeric vetNote is stringified', typeof messy.vetNote === 'string', typeof messy.vetNote);
+  ok('markup in a field is not stripped but is escaped downstream',
+    typeof messy.positives[0] === 'string');
+
+  ok('text is whitespace-collapsed', Validation.clampText('  a   b  ', 20) === 'a b');
+  ok('text is capped', Validation.clampText('abcdefgh', 4) === 'abcd');
+  ok('empty text is empty', Validation.clampText(null, 10) === '');
+  ok('numbers are clamped high', Validation.clampNumber(99999, 0, 5000) === 5000);
+  ok('numbers are clamped low', Validation.clampNumber(-5, 0, 600) === 0);
+  ok('non-numeric becomes null', Validation.clampNumber('abc', 0, 100) === null);
+  ok('empty becomes null', Validation.clampNumber('', 0, 100) === null);
+}
+
+// The shared AI call must keep its original behaviour for /api/pet-info.
+ok('the AI retry still asks for the same task',
+  /callAI\(context, true, options\)/.test(server),
+  'a retry that drops the options would silently re-ask the other prompt');
+ok('a missing AI key is reported as not configured',
+  /err\.code = 'ai_not_configured'/.test(server));
+ok('the review uses its own prompt',
+  /systemPrompt: REVIEW_SYSTEM_PROMPT/.test(server));
+ok('the review response is normalised before sending',
+  /res\.json\(normaliseReview\(result\)\)/.test(server));
 
 console.log('\n' + (failures ? failures + ' of ' + checks + ' checks FAILED' : 'All ' + checks + ' checks passed'));
 process.exit(failures ? 1 : 0);

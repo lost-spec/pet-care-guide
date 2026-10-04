@@ -192,6 +192,30 @@
                 placeholder="Anything unusual today, portion sizes, mood…"></textarea>
             </div>
 
+            <div class="tracker-review">
+              <div class="tracker-review-head">
+                <button type="button" class="btn btn-secondary" id="review-btn">
+                  Ask for a review of this day
+                </button>
+                <p class="tracker-review-hint" id="review-status" role="status" aria-live="polite"></p>
+              </div>
+
+              <div class="tracker-review-result hidden" id="review-result">
+                <div class="tracker-verdict-row">
+                  <span class="tracker-verdict" id="review-verdict">Watch</span>
+                  <p class="tracker-review-headline" id="review-headline"></p>
+                </div>
+
+                <div class="tracker-review-lists" id="review-lists"></div>
+
+                <p class="tracker-review-vet hidden" id="review-vet"></p>
+                <p class="tracker-review-foot">
+                  Guidance only, not a diagnosis. Speak to a vet about anything that
+                  worries you.
+                </p>
+              </div>
+            </div>
+
             <div class="tracker-actions">
               <p class="tracker-save" id="save-status" role="status" aria-live="polite"></p>
               <button type="button" class="btn btn-secondary" id="clear-day-btn">Clear this day</button>
