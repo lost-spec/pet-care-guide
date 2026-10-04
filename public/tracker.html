@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Care Tracker | Pet Care Guide</title>
+  <meta name="description" content="Track daily feeding, water, exercise, washing, medication and calories for your pet, with a weekly history kept privately in your browser.">
+  <meta name="robots" content="noindex, follow">
+  <meta name="theme-color" content="#2d6a4f" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0c1f18" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://pet-care-guide.vercel.app/tracker.html">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Pet Care Guide">
+  <meta property="og:title" content="Daily Care Tracker | Pet Care Guide">
+  <meta property="og:description" content="Track feeding, water, exercise, washing, medication and daily calories for your pet.">
+  <meta property="og:url" content="https://pet-care-guide.vercel.app/tracker.html">
+  <meta property="og:image" content="https://pet-care-guide.vercel.app/og-image.svg">
+  <meta property="og:locale" content="en_US">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Daily Care Tracker | Pet Care Guide">
+  <meta name="twitter:description" content="Track feeding, water, exercise, washing, medication and daily calories for your pet.">
+  <meta name="twitter:image" content="https://pet-care-guide.vercel.app/og-image.svg">
+
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="favicon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="aurora" aria-hidden="true"></div>
+
+  <a class="skip-link" href="#tracker-main">Skip to tracker</a>
+
+  <div class="page-wrapper">
+    <div class="container">
+
+      <header class="hero">
+        <div class="hero-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4.5" width="18" height="16.5" rx="3"></rect>
+            <path d="M3 9.5h18M8 2.5v4M16 2.5v4"></path>
+            <path d="M9 14.5l2 2 4-4"></path>
+          </svg>
+        </div>
+        <h1 class="hero-title">Daily Care Tracker</h1>
+        <p class="hero-tagline">Feeding, water, exercise, washing and calories, day by day</p>
+      </header>
+
+      <main id="tracker-main">
+
+        <p class="storage-note" id="storage-note" role="status">
+          Saved in this browser only. Nothing is uploaded, and clearing your browser data will erase it.
+        </p>
+
+        <!-- ------------------------------------------------------- profile -->
+        <section class="info-card glass-card tracker-card" aria-labelledby="profile-title">
+          <header class="info-card-head">
+            <span class="pill pill-sources" aria-hidden="true">01</span>
+            <h2 id="profile-title" class="info-card-title">Your pet</h2>
+          </header>
+
+          <div class="tracker-grid">
+            <div class="field">
+              <input type="text" id="pet-name" maxlength="40" autocomplete="off" placeholder=" ">
+              <label for="pet-name">Pet's name</label>
+            </div>
+
+            <div class="field select-field">
+              <select id="pet-type"></select>
+              <label for="pet-type">Type</label>
+            </div>
+
+            <div class="field">
+              <input type="text" id="pet-diet" maxlength="80" autocomplete="off" placeholder=" "
+                aria-describedby="pet-diet-hint">
+              <label for="pet-diet">Diet</label>
+              <p class="field-hint" id="pet-diet-hint">For example, dry kibble with wet food</p>
+            </div>
+
+            <div class="field">
+              <input type="number" id="pet-calorie-target" inputmode="numeric" min="0" max="5000" step="1"
+                placeholder=" " aria-describedby="pet-calorie-hint">
+              <label for="pet-calorie-target">Daily calorie target (kcal)</label>
+              <p class="field-hint" id="pet-calorie-hint">Daily calories per day, not per meal</p>
+            </div>
+          </div>
+
+          <p class="tracker-summary" id="profile-summary"></p>
+        </section>
+
+        <!-- ---------------------------------------------------- day entry -->
+        <section class="info-card glass-card tracker-card" aria-labelledby="day-title">
+          <header class="info-card-head">
+            <span class="pill pill-feeding" aria-hidden="true">02</span>
+            <h2 id="day-title" class="info-card-title">Daily log</h2>
+          </header>
+
+          <div class="tracker-grid tracker-grid-date">
+            <div class="field">
+              <input type="date" id="entry-date" placeholder=" ">
+              <label for="entry-date">Date</label>
+            </div>
+            <p class="field-hint tracker-day-hint" id="entry-rel">Today</p>
+          </div>
+
+          <fieldset class="tracker-checklist">
+            <legend class="tracker-legend">Done today</legend>
+
+            <label class="check-chip" for="chk-fed">
+              <input type="checkbox" id="chk-fed" data-key="fed">
+              <span class="check-chip-body">
+                <span class="check-chip-icon" aria-hidden="true">🍽</span>
+                <span class="check-chip-text">Fed</span>
+              </span>
+            </label>
+
+            <label class="check-chip" for="chk-water">
+              <input type="checkbox" id="chk-water" data-key="water">
+              <span class="check-chip-body">
+                <span class="check-chip-icon" aria-hidden="true">💧</span>
+                <span class="check-chip-text">Fresh water</span>
+              </span>
+            </label>
+
+            <label class="check-chip" for="chk-exercise">
+              <input type="checkbox" id="chk-exercise" data-key="exercise">
+              <span class="check-chip-body">
+                <span class="check-chip-icon" aria-hidden="true">🐾</span>
+                <span class="check-chip-text">Exercise or walk</span>
+              </span>
+            </label>
+
+            <label class="check-chip" for="chk-wash">
+              <input type="checkbox" id="chk-wash" data-key="wash">
+              <span class="check-chip-body">
+                <span class="check-chip-icon" aria-hidden="true">🛁</span>
+                <span class="check-chip-text">Washed or groomed</span>
+              </span>
+            </label>
+
+            <label class="check-chip" for="chk-meds">
+              <input type="checkbox" id="chk-meds" data-key="meds">
+              <span class="check-chip-body">
+                <span class="check-chip-icon" aria-hidden="true">💊</span>
+                <span class="check-chip-text">Medication or supplement</span>
+              </span>
+            </label>
+
+            <label class="check-chip" for="chk-potty">
+              <input type="checkbox" id="chk-potty" data-key="potty">
+              <span class="check-chip-body">
+                <span class="check-chip-icon" aria-hidden="true">🌿</span>
+                <span class="check-chip-text">Potty normal</span>
+              </span>
+            </label>
+          </fieldset>
+
+          <div class="tracker-grid tracker-grid-metrics">
+            <div class="field">
+              <input type="number" id="entry-calories" inputmode="numeric" min="0" max="5000" step="1"
+                placeholder=" " aria-describedby="entry-calories-hint">
+              <label for="entry-calories">Calories given (kcal)</label>
+              <p class="field-hint" id="entry-calories-hint">What they actually ate today</p>
+            </div>
+
+            <div class="field">
+              <input type="number" id="entry-minutes" inputmode="numeric" min="0" max="600" step="5"
+                placeholder=" " aria-describedby="entry-minutes-hint">
+              <label for="entry-minutes">Exercise (minutes)</label>
+              <p class="field-hint" id="entry-minutes-hint">Walk, play or training time</p>
+            </div>
+
+            <div class="field-group-inline tracker-weight">
+              <div class="field">
+                <input type="number" id="entry-weight" inputmode="decimal" min="0" max="2000" step="0.1"
+                  placeholder=" " aria-describedby="entry-weight-hint">
+                <label for="entry-weight">Weight</label>
+                <p class="field-hint" id="entry-weight-hint">Optional. Helps spot trends.</p>
+              </div>
+              <div class="field select-field unit-field">
+                <select id="entry-weight-unit" aria-label="Weight unit">
+                  <option value="kg">kg</option>
+                  <option value="lb">lb</option>
+                </select>
+                <svg class="select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6"></path>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="field tracker-notes">
+            <label class="tracker-notes-label" for="entry-notes">Notes</label>
+            <textarea id="entry-notes" maxlength="500" rows="3"
+              placeholder="Anything unusual today, portion sizes, mood, litter box…"></textarea>
+          </div>
+
+          <div class="tracker-actions">
+            <p class="tracker-save" id="save-status" role="status" aria-live="polite"></p>
+            <button type="button" class="btn btn-secondary" id="clear-day-btn">Clear this day</button>
+          </div>
+        </section>
+
+        <!-- ------------------------------------------------------- weekly -->
+        <section class="info-card glass-card tracker-card" aria-labelledby="week-title">
+          <header class="info-card-head">
+            <span class="pill pill-environment" aria-hidden="true">03</span>
+            <h2 id="week-title" class="info-card-title">Last 7 days</h2>
+          </header>
+
+          <div class="week-strip" id="week-strip" role="list" aria-label="Daily care summary for the last seven days"></div>
+
+          <p class="week-empty" id="week-empty">Nothing logged yet. Tick something above and it will show up here.</p>
+
+          <div class="week-stats" id="week-stats" hidden>
+            <div class="week-stat">
+              <span class="week-stat-label">Days fed</span>
+              <span class="week-stat-value" id="stat-fed">0</span>
+            </div>
+            <div class="week-stat">
+              <span class="week-stat-label">Days exercised</span>
+              <span class="week-stat-value" id="stat-exercise">0</span>
+            </div>
+            <div class="week-stat">
+              <span class="week-stat-label">Avg calories</span>
+              <span class="week-stat-value" id="stat-calories">0</span>
+            </div>
+            <div class="week-stat">
+              <span class="week-stat-label">Fed streak</span>
+              <span class="week-stat-value" id="stat-streak">0</span>
+            </div>
+          </div>
+
+          <p class="tracker-warning" id="tracker-warning" hidden role="status"></p>
+
+          <div class="tracker-actions">
+            <button type="button" class="btn btn-secondary" id="clear-all-btn">Delete all tracker data</button>
+          </div>
+        </section>
+
+      </main>
+
+      <footer class="site-footer">
+        <p class="disclaimer">General guidance only. Consult a vet for specific health or diet decisions.</p>
+        <nav class="footer-nav" aria-label="Site sections">
+          <a href="/">Care guide</a>
+          <a href="/sources.html">Sources</a>
+          <a href="/tracker.html" aria-current="page">Daily tracker</a>
+        </nav>
+        <p class="copyright">&copy; 2026 Pet Care Guide</p>
+      </footer>
+
+    </div>
+  </div>
+
+  <script src="utils.js"></script>
+  <script src="birds.js"></script>
+  <script src="pet-data.js"></script>
+  <script src="tracker.js"></script>
+</body>
+</html>

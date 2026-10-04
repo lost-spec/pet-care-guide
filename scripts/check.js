@@ -505,5 +505,117 @@ errorKeys.forEach((key) => {
   ok('error message "' + key + '" is used', uses > 0, 'defined but never referenced');
 });
 
+/* ------------------------------------------------------------ 11. tracker */
+section('Daily tracker');
+const trackerHtml = read('public/tracker.html');
+const trackerJs = read('public/tracker.js');
+
+// Every id the script looks up must exist in the page.
+const trackerRefs = [...trackerJs.matchAll(/getElementById\('([^']+)'\)/g)].map((m) => m[1]);
+const trackerIds = new Set([...trackerHtml.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+ok('tracker has elements', trackerIds.size > 15);
+trackerRefs.forEach((id) => {
+  ok('tracker script finds #' + id, trackerIds.has(id), 'missing id: ' + id);
+});
+
+// The checklist must be real checkboxes, not divs with click handlers.
+['fed', 'water', 'exercise', 'wash', 'meds', 'potty'].forEach((key) => {
+  ok('tracker tracks "' + key + '"', new RegExp('data-key="' + key + '"').test(trackerHtml));
+});
+ok('checklist is a fieldset with a legend',
+  /<fieldset class="tracker-checklist">/.test(trackerHtml) && /<legend class="tracker-legend">/.test(trackerHtml));
+ok('checklist uses native checkboxes', (trackerHtml.match(/type="checkbox"/g) || []).length >= 6);
+ok('each checkbox has a label', (trackerHtml.match(/class="check-chip" for="chk-/g) || []).length >= 6);
+
+// The seven habits the user asked to track must all be user-visible.
+['Fed', 'Fresh water', 'Exercise or walk', 'Washed or groomed', 'Medication or supplement', 'Potty normal']
+  .forEach((label) => {
+    ok('tracker shows "' + label + '"', trackerHtml.includes('>' + label + '<'));
+  });
+ok('tracker captures diet', /id="pet-diet"/.test(trackerHtml));
+ok('tracker captures calories given', /id="entry-calories"/.test(trackerHtml));
+ok('tracker captures a daily calorie target', /id="pet-calorie-target"/.test(trackerHtml));
+ok('tracker captures weight', /id="entry-weight"/.test(trackerHtml));
+ok('tracker lets you pick a past date', /id="entry-date"[^>]*type="date"|type="date"[^>]*id="entry-date"/.test(trackerHtml));
+
+// Storage is local and the user is told so.
+ok('tracker uses localStorage', /localStorage/.test(trackerJs));
+ok('tracker says data stays in the browser', /browser only|blocking local storage/.test(trackerHtml + trackerJs));
+ok('tracker has a delete-all control', /id="clear-all-btn"/.test(trackerHtml));
+ok('tracker survives blocked storage', /storageWorks/.test(trackerJs));
+ok('tracker is excluded from search indexing', /name="robots" content="noindex/.test(trackerHtml));
+
+// Reachable from every page.
+ok('home page links to the tracker', /href="\/tracker\.html"/.test(html));
+ok('sources page links to the tracker', /href="\/tracker\.html"/.test(sourcesHtml));
+const firstBreedDir = BREED_DIRS[0];
+const firstBreedPage = fs.readdirSync(path.join(ROOT, 'public', firstBreedDir))
+  .filter((f) => f.endsWith('.html'))
+  .map((f) => read('public/' + firstBreedDir + '/' + f))[0] || '';
+ok('breed pages link to the tracker', /href="\/tracker\.html"/.test(firstBreedPage), firstBreedDir);
+ok('home page shows a tracker button', /class="btn btn-secondary btn-large" href="\/tracker\.html"/.test(html));
+ok('tracker is not in the sitemap', !/tracker\.html/.test(sitemap));
+ok('tracker styles exist', /\.week-strip \{/.test(css) && /\.check-chip-body \{/.test(css));
+
+// Exercise the storage and maths logic without a browser. Only the pure data
+// layer runs here: everything after the wiring banner needs a real DOM.
+const WIRING_MARKER = 'function populateTypes';
+const wiringAt = trackerJs.indexOf(WIRING_MARKER);
+ok('tracker has a testable seam before the DOM wiring', wiringAt > 0);
+if (wiringAt > 0) {
+  // The slice already sits inside the module's own IIFE, so close that one
+  // rather than wrapping it in another function.
+  const trackerSrc = trackerJs.slice(0, wiringAt) + '\n})();';
+  const trackerSandbox = { window: {}, document: undefined };
+  const trackerModule = new vm.Script(trackerSrc, { filename: 'tracker.data-layer.js' });
+  trackerModule.runInNewContext(Object.assign(trackerSandbox, {
+    window: Object.assign(trackerSandbox.window, { localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } }),
+    // The data layer only builds its element map at load time; nothing
+    // dereferences it before the wiring section.
+    document: { getElementById: () => null, querySelector: () => null, addEventListener: () => {} },
+    JSON, Math, Date, Number, String, Object, Array, isFinite, RegExp, console
+  }));
+  var Tracker = trackerSandbox.window.PetTracker;
+
+  ok('tracker exposes its helpers', !!Tracker && typeof Tracker.normalise === 'function');
+}
+
+// A hostile or half-written stored record must not produce undefined fields.
+const nasty = Tracker.normalise({
+  profile: { name: 'x'.repeat(200), diet: null, calorieTarget: 'abc', type: 'Dog' },
+  entries: {
+    '2026-10-04': { fed: 'yes', calories: '99999', minutes: -5, weight: 'abc', weightUnit: 'xx', notes: 'n'.repeat(900) },
+    'not-a-date': { fed: true },
+    '2026-10-05': null
+  }
+});
+ok('profile name is length-capped', nasty.profile.name.length === 40, nasty.profile.name.length + ' chars');
+ok('null diet becomes an empty string', nasty.profile.diet === '');
+ok('non-numeric calorie target is dropped', nasty.profile.calorieTarget === '');
+ok('invalid date keys are discarded', !('not-a-date' in nasty.entries));
+const day = nasty.entries['2026-10-04'];
+ok('checkbox coercion keeps booleans', day.fed === false && day.water === false);
+ok('calories are clamped to the allowed range', day.calories === '5000', day.calories);
+ok('minutes are clamped to the allowed range', day.minutes === '0', day.minutes);
+ok('non-numeric weight is dropped', day.weight === '', day.weight);
+ok('unknown weight unit falls back to kg', day.weightUnit === 'kg');
+ok('notes are length-capped', day.notes.length === 500, day.notes.length + ' chars');
+ok('a null entry yields a usable day', Tracker.normalise({ entries: { '2026-10-05': null } }).entries['2026-10-05'].fed === false);
+
+ok('blank entry has every checkbox key',
+  Tracker.blankEntry && ['fed', 'water', 'exercise', 'wash', 'meds', 'potty'].every((k) => k in Tracker.blankEntry()));
+
+// Date maths must cross month and year boundaries correctly.
+ok('date maths crosses a month boundary', Tracker.shiftIso('2026-10-01', -1) === '2026-09-30',
+  Tracker.shiftIso('2026-10-01', -1));
+ok('date maths crosses a year boundary', Tracker.shiftIso('2026-01-01', -1) === '2025-12-31',
+  Tracker.shiftIso('2026-01-01', -1));
+ok('date maths handles a leap day', Tracker.shiftIso('2026-03-01', -1) === '2026-02-28',
+  Tracker.shiftIso('2026-03-01', -1));
+ok('date maths crosses a leap day', Tracker.shiftIso('2024-03-01', -1) === '2024-02-29',
+  Tracker.shiftIso('2024-03-01', -1));
+ok('date maths formats with padding', Tracker.toIso(new Date(2026, 0, 5)) === '2026-01-05',
+  Tracker.toIso(new Date(2026, 0, 5)));
+
 console.log('\n' + (failures ? failures + ' of ' + checks + ' checks FAILED' : 'All ' + checks + ' checks passed'));
 process.exit(failures ? 1 : 0);
