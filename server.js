@@ -39,9 +39,9 @@ function validateInput(petType, breed) {
 }
 
 async function callAI(petType, breed, retry = false) {
-  const baseUrl = process.env.LLM_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai';
+  const baseUrl = process.env.LLM_BASE_URL || 'https://generativelanguage.googleapis.com/v1/openai';
   const apiKey = process.env.LLM_API_KEY;
-  const model = process.env.LLM_MODEL || 'gemini-1.5-flash';
+  const model = process.env.LLM_MODEL || 'gemini-1.5-flash-002';
   const extraHeaders = process.env.LLM_EXTRA_HEADERS ? JSON.parse(process.env.LLM_EXTRA_HEADERS) : {};
 
   if (!apiKey) {
