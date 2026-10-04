@@ -53,7 +53,7 @@ async function callAI(petType, breed, retry = false) {
       'X-Title': 'Pet Care Guide'
     },
     body: JSON.stringify({
-      model: 'qwen/qwen3-8b:free',
+      model: 'qwen/qwen3-7-plus:free',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: `Pet type: ${petType}, Breed: ${breed}` }
