@@ -11,6 +11,24 @@
 
   var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
+  /* ---- Select: floating label + placeholder tone --------------------- */
+  // `select` cannot use :placeholder-shown, so mirror it with .has-value.
+  // Applied to every select in a .field wrapper, not just the pet type.
+  function syncSelect(select) {
+    var field = select.closest('.field');
+    var hasValue = !!select.value;
+    if (field) field.classList.toggle('has-value', hasValue);
+    select.style.color = hasValue ? '' : 'var(--text-muted)';
+  }
+
+  function initSelectState() {
+    var selects = document.querySelectorAll('.field select');
+    selects.forEach(function (select) {
+      select.addEventListener('change', function () { syncSelect(select); });
+      syncSelect(select);
+    });
+  }
+
   /* ---- Scroll reveal -------------------------------------------------- */
   function initReveal() {
     var targets = document.querySelectorAll('.reveal');
@@ -33,24 +51,6 @@
     targets.forEach(function (el) { io.observe(el); });
   }
 
-  /* ---- Select: floating label + placeholder tone --------------------- */
-  function initSelectState() {
-    var select = document.getElementById('pet-type');
-    if (!select) return;
-
-    var field = document.getElementById('pet-type-field') || select.closest('.field');
-
-    var sync = function () {
-      var hasValue = !!select.value;
-      // `select` cannot use :placeholder-shown, so mirror it with a class
-      if (field) field.classList.toggle('has-value', hasValue);
-      select.style.color = hasValue ? '' : 'var(--text-muted)';
-    };
-
-    select.addEventListener('change', sync);
-    sync();
-  }
-
   /* ---- Smooth in-page anchor scrolling -------------------------------- */
   function initAnchors() {
     document.querySelectorAll('a[href^="#"]').forEach(function (link) {
@@ -69,12 +69,32 @@
     });
   }
 
+  /* ---- Read more / show less disclosure ------------------------------ */
+  function initDisclosures() {
+    document.querySelectorAll('.btn-read-more').forEach(function (button) {
+      var targetId = button.getAttribute('data-target');
+      var label = button.getAttribute('data-label') || 'details';
+      var text = button.querySelector('.read-more-text');
+      var target = targetId ? document.getElementById(targetId) : null;
+      if (!target || !text) return;
+
+      button.addEventListener('click', function () {
+        var expanded = button.getAttribute('aria-expanded') === 'true';
+        button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        target.classList.toggle('hidden', expanded);
+        text.textContent = expanded
+          ? 'Read more about ' + label
+          : 'Show less';
+      });
+    });
+  }
+
   /* ---- Enter key submits from text inputs ----------------------------- */
   function initEnterSubmit() {
     var form = document.getElementById('pet-form');
     if (!form) return;
 
-    ['breed', 'location'].forEach(function (id) {
+    ['breed', 'location', 'weight'].forEach(function (id) {
       var input = document.getElementById(id);
       if (!input) return;
       input.addEventListener('keydown', function (event) {
@@ -90,6 +110,7 @@
   function init() {
     initReveal();
     initSelectState();
+    initDisclosures();
     initAnchors();
     initEnterSubmit();
   }

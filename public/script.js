@@ -1,440 +1,578 @@
-// Pet Care Guide - Frontend JavaScript
+/**
+ * script.js — form state, validation, API calls and rendering.
+ * Reads pet-data.js (PetData) for per-species options.
+ */
+(function () {
+  'use strict';
 
-// Shared utilities
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
+  var form = document.getElementById('pet-form');
+  var petTypeSelect = document.getElementById('pet-type');
+  var breedInput = document.getElementById('breed');
+  var breedList = document.getElementById('breed-list');
+  var breedLabel = document.getElementById('breed-label');
+  var ageSelect = document.getElementById('age-stage');
+  var weightInput = document.getElementById('weight');
+  var weightUnitSelect = document.getElementById('weight-unit');
+  var locationInput = document.getElementById('location');
+  var submitBtn = document.getElementById('submit-btn');
+  var submitText = submitBtn.querySelector('.btn-text');
+  var spinner = submitBtn.querySelector('.spinner');
+  var formError = document.getElementById('form-error');
 
-function getUrlParams() {
-  const params = new URLSearchParams(window.location.search);
-  return {
-    petType: params.get('petType') || '',
-    breed: params.get('breed') || '',
-    location: params.get('location') || ''
-  };
-}
+  var results = document.getElementById('results');
+  var resultsHeading = document.getElementById('results-heading');
+  var resultsLoading = document.getElementById('results-loading');
+  var resultsBody = document.getElementById('results-body');
+  var warnings = document.getElementById('warnings');
+  var hazardsBlock = document.getElementById('hazards-block');
+  var hazards = document.getElementById('hazards');
+  var warningsBlock = document.getElementById('warnings-block');
+  var warningsList = document.getElementById('warnings-list');
+  var summaryEl = document.getElementById('summary');
 
-// ============ INDEX.HTML LOGIC ============
-const form = document.getElementById('pet-form');
-if (form) {
-  const submitBtn = document.getElementById('submit-btn');
-  const btnText = submitBtn.querySelector('.btn-text');
-  const spinner = submitBtn.querySelector('.spinner');
-  const formError = document.getElementById('form-error');
-  const results = document.getElementById('results');
-  const errorState = document.getElementById('error-state');
-  const errorTitle = document.getElementById('error-title');
-  const errorMessage = document.getElementById('error-message');
-  const retryBtn = document.getElementById('retry-btn');
-  const summaryEl = document.getElementById('summary');
-  const feedingKeypoints = document.getElementById('feeding-keypoints');
-  const feedingDetails = document.getElementById('feeding-details');
-  const environmentKeypoints = document.getElementById('environment-keypoints');
-  const environmentDetails = document.getElementById('environment-details');
-  const warningsEl = document.getElementById('warnings');
-  const warningsList = document.getElementById('warnings-list');
-  const sourcesSection = document.getElementById('sources-section');
-  const sourcesGrid = document.getElementById('sources-grid');
-  const sourcesLoading = document.getElementById('sources-loading');
-  const sourcesError = document.getElementById('sources-error');
+  var sourcesSection = document.getElementById('sources-section');
+  var sourcesLoading = document.getElementById('sources-loading');
+  var sourcesError = document.getElementById('sources-error');
+  var sourcesEmpty = document.getElementById('sources-empty');
+  var sourcesGrid = document.getElementById('sources-grid');
+  var sourcesLocationPrompt = document.getElementById('sources-location-prompt');
+  var sourcesLocationInput = document.getElementById('sources-location');
+  var sourcesLocationBtn = document.getElementById('sources-location-btn');
 
-  let lastRequest = { petType: '', breed: '', location: '' };
+  var errorState = document.getElementById('error-state');
+  var errorMessage = document.getElementById('error-message');
+  var retryBtn = document.getElementById('retry-btn');
+
+  var sourcesLocation = '';
+  var lastRequest = null;
+
+  /* ---------------------------------------------------------------- utils */
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function isMobile() {
+    return window.matchMedia('(max-width: 768px)').matches;
+  }
+
+  /* ------------------------------------------------------- pet-data wiring */
+
+  function populateStages(petType, keep) {
+    var options = window.PetData ? PetData.stages(petType) : [];
+    ageSelect.innerHTML = '<option value="">Select…</option>';
+    options.forEach(function (stage) {
+      var option = document.createElement('option');
+      option.value = stage;
+      option.textContent = stage;
+      ageSelect.appendChild(option);
+    });
+    if (keep && options.indexOf(keep) > -1) ageSelect.value = keep;
+    // Let ui.js re-evaluate the floating label for the rebuilt option list.
+    ageSelect.dispatchEvent(new Event('change'));
+  }
+
+  function populateBreeds(petType) {
+    var options = window.PetData ? PetData.breeds(petType) : [];
+    breedList.innerHTML = '';
+    options.forEach(function (name) {
+      var option = document.createElement('option');
+      option.value = name;
+      breedList.appendChild(option);
+    });
+  }
+
+  function applyNoun(petType) {
+    var noun = window.PetData ? PetData.noun(petType) : 'Breed';
+    breedLabel.textContent = noun;
+    breedInput.placeholder = window.PetData && petType ? PetData.placeholder(petType) : ' ';
+    breedInput.setAttribute('aria-label', noun);
+    form.setAttribute('data-breed-noun', noun);
+  }
+
+  function onPetTypeChange() {
+    var petType = petTypeSelect.value;
+    applyNoun(petType);
+    populateBreeds(petType);
+    populateStages(petType, ageSelect.value);
+    clearFieldError(breedInput, 'breed-error');
+    if (!results.classList.contains('hidden')) {
+      // Options changed under an existing result set — start clean.
+      hideResults();
+    }
+  }
+
+  /* ---------------------------------------------------------- validation */
+
+function looksLikeGibberish(value) {
+    // 4-character runs from QWERTY rows, forwards and backwards. Real breed
+    // names never contain these; keyboard mashing always does.
+    var keyboardRuns = ('qwer wert erty rtyu tyui yuiop asdf sdfg dfgh fghj ghjk ' +
+      'zxcv xcvb cvbn vbnm poiu oiuy iuyt uytr lkjh kjhg jhgf hgfd gfed ' +
+      'nmbv mbvc bvcx vcxz 1234 2345 3456 4567 5678 6789 9876 8765 7654 6543 ' +
+      'qaz wsx edc rfv tgb yhn ujm azq xsw cde vfr bgt hny mju').split(' ');
+
+    var s = value.toLowerCase();
+    var letters = s.replace(/[^a-z]/g, '');
+    if (letters.length < 2) return true;
+    if (/([a-z])\1{3,}/.test(letters)) return true;           // "aaaaaa"
+    if (/[bcdfghjklmnpqrstvwxz]{5,}/.test(letters)) return true; // "kjhsdf"
+    if (/[aeiou]{4,}/.test(letters)) return true;                // "aeiouae"
+    for (var i = 0; i < keyboardRuns.length; i++) {
+      if (s.indexOf(keyboardRuns[i]) > -1) return true;         // "qwerty"
+    }
+    return false;
+  }
+    return false;
+  }
+
+  function setFieldError(input, errorId, message) {
+    var error = document.getElementById(errorId);
+    if (message) {
+      error.textContent = message;
+      error.classList.remove('hidden');
+      input.setAttribute('aria-invalid', 'true');
+    } else {
+      error.textContent = '';
+      error.classList.add('hidden');
+      input.setAttribute('aria-invalid', 'false');
+    }
+  }
+
+  function clearFieldError(input, errorId) {
+    setFieldError(input, errorId, '');
+  }
+
+  function validateBreed() {
+    var raw = breedInput.value || '';
+    var value = raw.trim();
+    breedInput.value = value;
+
+    if (!value) {
+      setFieldError(breedInput, 'breed-error', 'Enter a breed or species, or choose “Mixed / Not sure”.');
+      return null;
+    }
+    if (value.length > 60) {
+      setFieldError(breedInput, 'breed-error', 'Keep this under 60 characters.');
+      return null;
+    }
+    if (!/[a-z]/i.test(value)) {
+      setFieldError(breedInput, 'breed-error', 'Use letters, for example “Labrador Retriever”.');
+      return null;
+    }
+    if (looksLikeGibberish(value)) {
+      setFieldError(breedInput, 'breed-error', 'That does not look like a breed name. Check the spelling, or choose “Mixed / Not sure”.');
+      return null;
+    }
+    clearFieldError(breedInput, 'breed-error');
+    return value;
+  }
+
+  function validateWeight() {
+    var raw = (weightInput.value || '').trim();
+    if (!raw) {
+      clearFieldError(weightInput, 'weight-error');
+      return { weight: '', weightUnit: weightUnitSelect.value };
+    }
+    var num = Number(raw);
+    if (!/^\d*\.?\d{1,2}$/.test(raw) || !isFinite(num) || num <= 0 || num > 2000) {
+      setFieldError(weightInput, 'weight-error', 'Enter a number between 0 and 2000.');
+      return null;
+    }
+    clearFieldError(weightInput, 'weight-error');
+    return { weight: raw, weightUnit: weightUnitSelect.value };
+  }
+
+  /* --------------------------------------------------------- URL  state  */
+
+  function getUrlParams() {
+    var params = new URLSearchParams(window.location.search);
+    return {
+      petType: params.get('type') || params.get('petType') || '',
+      breed: params.get('breed') || '',
+      ageStage: params.get('age') || params.get('ageStage') || '',
+      weight: params.get('wt') || params.get('weight') || '',
+      weightUnit: params.get('unit') || params.get('weightUnit') || 'kg',
+      location: params.get('location') || ''
+    };
+  }
+
+  function updateUrl(state) {
+    var params = new URLSearchParams();
+    if (state.petType) params.set('type', state.petType);
+    if (state.breed) params.set('breed', state.breed);
+    if (state.ageStage) params.set('age', state.ageStage);
+    if (state.weight) {
+      params.set('wt', state.weight);
+      params.set('unit', state.weightUnit);
+    }
+    if (state.location) params.set('location', state.location);
+    var query = params.toString();
+    window.history.replaceState(null, '', query ? '?' + query : window.location.pathname);
+  }
+
+  /* ------------------------------------------------------- state changes */
 
   function setLoading(isLoading) {
     submitBtn.disabled = isLoading;
-    btnText.textContent = isLoading ? 'Loading...' : 'Get Care Info';
+    submitBtn.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+    submitText.textContent = isLoading ? 'Fetching care info…' : 'Get Care Info';
     spinner.classList.toggle('hidden', !isLoading);
-    formError.classList.add('hidden');
-  }
-
-  function setSourcesLoading(isLoading) {
-    sourcesLoading.classList.toggle('hidden', !isLoading);
-    sourcesGrid.classList.toggle('hidden', isLoading);
-    sourcesError.classList.add('hidden');
-  }
-
-  function showError(message, title = 'Something went wrong') {
-    results.classList.add('hidden');
-    errorTitle.textContent = title;
-    errorMessage.textContent = message;
-    errorState.classList.remove('hidden');
-  }
-
-  function showResults(data) {
-    errorState.classList.add('hidden');
-    
-    summaryEl.textContent = data.summary || '';
-    
-    renderKeypoints(feedingKeypoints, data.feeding?.keyPoints || []);
-    feedingDetails.textContent = data.feeding?.details || '';
-    feedingDetails.classList.add('hidden');
-    document.querySelector('[data-target="feeding-details"]').setAttribute('aria-expanded', 'false');
-    
-    renderKeypoints(environmentKeypoints, data.environment?.keyPoints || []);
-    environmentDetails.textContent = data.environment?.details || '';
-    environmentDetails.classList.add('hidden');
-    document.querySelector('[data-target="environment-details"]').setAttribute('aria-expanded', 'false');
-    
-    if (data.warnings && data.warnings.length > 0) {
-      warningsList.innerHTML = data.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('');
-      warningsEl.classList.remove('hidden');
+    if (isLoading) {
+      hideError();
+      results.classList.remove('hidden');
+      resultsLoading.classList.remove('hidden');
+      resultsBody.classList.add('hidden');
     } else {
-      warningsEl.classList.add('hidden');
-    }
-    
-    results.classList.remove('hidden');
-    results.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function renderKeypoints(container, keypoints) {
-    container.innerHTML = (keypoints || []).map(kp => `
-      <div class="keypoint-card">
-        <div class="keypoint-label">${escapeHtml(kp.label || '')}</div>
-        <div class="keypoint-value">${escapeHtml(kp.value || '')}</div>
-      </div>
-    `).join('');
-  }
-
-  function renderSources(shops) {
-    if (!shops || shops.length === 0) {
-      sourcesGrid.innerHTML = '<p style="text-align:center;color:var(--color-text-muted);padding:2rem;">No sources found. Try a different location or check local shelters.</p>';
-      return;
-    }
-    
-    sourcesGrid.innerHTML = shops.slice(0, 6).map(shop => {
-      const hasRating = shop.rating !== null && shop.rating !== undefined;
-      const typeClass = shop.type || 'organic';
-      return `
-        <article class="source-card">
-          <div class="source-header">
-            <h3 class="source-name">${escapeHtml(shop.name || 'Unknown')}</h3>
-            <span class="source-type ${typeClass}">${typeClass}</span>
-          </div>
-          ${shop.address ? `<p class="source-address">📍 ${escapeHtml(shop.address)}</p>` : ''}
-          ${shop.phone ? `<p class="source-phone">📞 ${escapeHtml(shop.phone)}</p>` : ''}
-          ${hasRating ? `<p class="source-rating"><span class="stars">${'★'.repeat(Math.round(shop.rating))}${'☆'.repeat(5 - Math.round(shop.rating))}</span> ${shop.rating.toFixed(1)} ${shop.reviews ? `(${shop.reviews} reviews)` : ''}</p>` : ''}
-          ${shop.price_range ? `<p class="source-price">💰 ${escapeHtml(shop.price_range)}</p>` : ''}
-          ${shop.snippet ? `<p class="source-snippet">${escapeHtml(shop.snippet)}</p>` : ''}
-          ${shop.url ? `<a href="${escapeHtml(shop.url)}" target="_blank" rel="noopener noreferrer" class="source-link">View Details →</a>` : ''}
-        </article>
-      `;
-    }).join('');
-    
-    if (shops.length > 6) {
-      const moreBtn = document.createElement('a');
-      moreBtn.href = `sources.html?petType=${encodeURIComponent(lastRequest.petType)}&breed=${encodeURIComponent(lastRequest.breed)}&location=${encodeURIComponent(lastRequest.location || '')}`;
-      moreBtn.className = 'btn-primary';
-      moreBtn.style.marginTop = '1rem';
-      moreBtn.style.display = 'inline-block';
-      moreBtn.textContent = `View all ${shops.length} sources →`;
-      sourcesGrid.appendChild(moreBtn);
+      resultsLoading.classList.add('hidden');
+      resultsBody.classList.remove('hidden');
     }
   }
 
-  async function fetchPetInfo(petType, breed) {
-    const response = await fetch('/api/pet-info', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ petType, breed })
-    });
-    
-    const data = await response.json().catch(() => ({}));
-    
-    if (!response.ok) {
-      const error = new Error(data.error || `Request failed with status ${response.status}`);
-      error.status = response.status;
-      error.data = data;
-      throw error;
-    }
-    
-    return data;
-  }
-
-  async function fetchPetSources(petType, breed, location) {
-    const response = await fetch('/api/pet-sources', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ petType, breed, location })
-    });
-    
-    const data = await response.json().catch(() => ({}));
-    
-    if (!response.ok) {
-      const error = new Error(data.error || `Request failed with status ${response.status}`);
-      error.status = response.status;
-      error.data = data;
-      throw error;
-    }
-    
-    return data;
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    
-    const petType = document.getElementById('pet-type').value.trim();
-    const breed = document.getElementById('breed').value.trim();
-    const location = document.getElementById('location').value.trim();
-    
-    if (!petType || !breed) {
-      formError.textContent = 'Please select a pet type and enter a breed';
-      formError.classList.remove('hidden');
-      return;
-    }
-    
-    lastRequest = { petType, breed, location };
-    setLoading(true);
-    errorState.classList.add('hidden');
+  function hideResults() {
     results.classList.add('hidden');
+    resultsBody.classList.add('hidden');
+    resultsLoading.classList.add('hidden');
+    warnings.classList.add('hidden');
     sourcesSection.classList.add('hidden');
-    
-    try {
-      const data = await fetchPetInfo(petType, breed);
-      showResults(data);
-      
-      sourcesSection.classList.remove('hidden');
-      setSourcesLoading(true);
-      
-      try {
-        const sourcesData = await fetchPetSources(petType, breed, location);
-        renderSources(sourcesData.shops || []);
-      } catch (sourceError) {
-        console.error('Sources error:', sourceError);
-        sourcesError.textContent = sourceError.message || 'Could not load sources. Try again later.';
-        sourcesError.classList.remove('hidden');
-        sourcesGrid.innerHTML = '';
-      } finally {
-        setSourcesLoading(false);
-      }
-      
-    } catch (error) {
-      console.error('Error:', error);
-      
-      const msg = error.data?.error || error.message || 'Unknown error';
-      
-      if (error.status === 400) {
-        formError.textContent = msg;
-        formError.classList.remove('hidden');
-      } else if (error.status === 404) {
-        showError(msg, 'Unknown Breed');
-      } else {
-        showError(`Server error: ${msg}`);
-      }
-    } finally {
-      setLoading(false);
-    }
   }
 
-  function handleReadMore(event) {
-    const btn = event.currentTarget;
-    const targetId = btn.dataset.target;
-    const details = document.getElementById(targetId);
-    const isExpanded = btn.getAttribute('aria-expanded') === 'true';
-    
-    btn.setAttribute('aria-expanded', !isExpanded);
-    btn.querySelector('.read-more-text').textContent = isExpanded ? 'Read more' : 'Show less';
-    details.classList.toggle('hidden', isExpanded);
-  }
-
-  function handleRetry() {
-    if (lastRequest.petType && lastRequest.breed) {
-      document.getElementById('pet-type').value = lastRequest.petType;
-      document.getElementById('breed').value = lastRequest.breed;
-      document.getElementById('location').value = lastRequest.location || '';
-      handleSubmit(new Event('submit'));
-    }
-  }
-
-  form.addEventListener('submit', handleSubmit);
-  retryBtn.addEventListener('click', handleRetry);
-
-  document.querySelectorAll('.btn-read-more').forEach(btn => {
-    btn.addEventListener('click', handleReadMore);
-  });
-
-  document.addEventListener('DOMContentLoaded', () => {
-    console.log('Pet Care Guide initialized');
-    document.getElementById('pet-type').focus();
-  });
-}
-
-// ============ SOURCES.HTML LOGIC ============
-const sourcesGrid = document.getElementById('sources-grid');
-if (sourcesGrid) {
-  const sourcesLoading = document.getElementById('sources-loading');
-  const sourcesError = document.getElementById('sources-error');
-  const noResults = document.getElementById('no-results');
-  const pagination = document.getElementById('pagination');
-  const prevPage = document.getElementById('prev-page');
-  const nextPage = document.getElementById('next-page');
-  const pageInfo = document.getElementById('page-info');
-  const typeFilter = document.getElementById('type-filter');
-  const sortFilter = document.getElementById('sort-filter');
-  const sourcesTitle = document.getElementById('breed-name');
-  const petTypeName = document.getElementById('pet-type-name');
-  const locationDisplay = document.getElementById('location-display');
-
-  let allShops = [];
-  let filteredShops = [];
-  let currentPage = 1;
-  const shopsPerPage = 12;
-  let currentParams = getUrlParams();
-
-  function setLoading(isLoading) {
-    sourcesLoading.classList.toggle('hidden', !isLoading);
-    sourcesGrid.classList.toggle('hidden', isLoading);
-    sourcesError.classList.add('hidden');
-    noResults.classList.add('hidden');
-    pagination.classList.add('hidden');
+  function hideError() {
+    errorState.classList.add('hidden');
   }
 
   function showError(message) {
-    sourcesError.textContent = message;
-    sourcesError.classList.remove('hidden');
-    sourcesGrid.innerHTML = '';
-    pagination.classList.add('hidden');
+    results.classList.add('hidden');
+    errorMessage.textContent = message;
+    errorState.classList.remove('hidden');
+    errorState.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  function renderShops(shops) {
-    if (!shops || shops.length === 0) {
-      sourcesGrid.innerHTML = '';
-      noResults.classList.remove('hidden');
-      pagination.classList.add('hidden');
-      return;
-    }
+  var ERROR_COPY = {
+    network: 'Could not reach the server. Check your connection and try again.',
+    invalidBreed: 'We could not match that breed. Try a common breed name, or choose “Mixed / Not sure”.',
+    rateLimit: 'Too many requests just now. Wait about a minute, then try again.',
+    noResults: 'No guidance came back for that pet. Try a different breed name.',
+    server: 'The server ran into a problem generating guidance. Please try again.'
+  };
 
-    noResults.classList.add('hidden');
-    
-    const start = (currentPage - 1) * shopsPerPage;
-    const end = start + shopsPerPage;
-    const pageShops = shops.slice(start, end);
-
-    sourcesGrid.innerHTML = pageShops.map(shop => {
-      const hasRating = shop.rating !== null && shop.rating !== undefined;
-      const typeClass = shop.type || 'organic';
-      return `
-        <article class="source-card">
-          <div class="source-header">
-            <h3 class="source-name">${escapeHtml(shop.name || 'Unknown')}</h3>
-            <span class="source-type ${typeClass}">${typeClass}</span>
-          </div>
-          ${shop.address ? `<p class="source-address">📍 ${escapeHtml(shop.address)}</p>` : ''}
-          ${shop.phone ? `<p class="source-phone">📞 ${escapeHtml(shop.phone)}</p>` : ''}
-          ${shop.gps_coordinates ? `<p class="source-address">📍 ${shop.gps_coordinates.lat.toFixed(4)}, ${shop.gps_coordinates.lng.toFixed(4)}</p>` : ''}
-          ${shop.hours ? `<p class="source-address">🕐 ${escapeHtml(typeof shop.hours === 'object' ? JSON.stringify(shop.hours) : shop.hours)}</p>` : ''}
-          ${hasRating ? `<p class="source-rating"><span class="stars">${'★'.repeat(Math.round(shop.rating))}${'☆'.repeat(5 - Math.round(shop.rating))}</span> ${shop.rating.toFixed(1)} ${shop.reviews ? `(${shop.reviews} reviews)` : ''}</p>` : ''}
-          ${shop.price_range ? `<p class="source-price">💰 ${escapeHtml(shop.price_range)}</p>` : ''}
-          ${shop.snippet ? `<p class="source-snippet">${escapeHtml(shop.snippet)}</p>` : ''}
-          ${shop.delivery ? `<p class="source-snippet">🚚 ${escapeHtml(shop.delivery)}</p>` : ''}
-          ${shop.url ? `<a href="${escapeHtml(shop.url)}" target="_blank" rel="noopener noreferrer" class="source-link">View Details →</a>` : ''}
-        </article>
-      `;
-    }).join('');
-
-    // Pagination
-    const totalPages = Math.ceil(shops.length / shopsPerPage);
-    if (totalPages > 1) {
-      pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
-      prevPage.disabled = currentPage === 1;
-      nextPage.disabled = currentPage === totalPages;
-      pagination.classList.remove('hidden');
-    } else {
-      pagination.classList.add('hidden');
-    }
+  function describeError(status, body) {
+    var message = body && body.error ? String(body.error) : '';
+    if (status === 404 || /unknown breed/i.test(message)) return ERROR_COPY.invalidBreed;
+    if (status === 429) return ERROR_COPY.rateLimit;
+    if (status === 503) return ERROR_COPY.network;
+    return ERROR_COPY.server;
   }
 
-  function applyFilters() {
-    const type = typeFilter.value;
-    const sort = sortFilter.value;
+  /* ------------------------------------------------------------ rendering */
 
-    filteredShops = allShops.filter(shop => {
-      if (type === 'all') return true;
-      return shop.type === type;
+  function renderKeypoints(container, points) {
+    container.innerHTML = '';
+    (points || []).forEach(function (point) {
+      var item = document.createElement('div');
+      item.className = 'keypoint-card';
+      item.setAttribute('role', 'listitem');
+      item.innerHTML =
+        '<div class="keypoint-label">' + escapeHtml(point.label) + '</div>' +
+        '<div class="keypoint-value">' + escapeHtml(point.value) + '</div>';
+      container.appendChild(item);
+    });
+  }
+
+  function renderDetails(id, text) {
+    var target = document.getElementById(id);
+    if (!target) return;
+    target.innerHTML = (text || '')
+      .split(/\n{2,}|\n/)
+      .filter(Boolean)
+      .map(function (para) { return '<p>' + escapeHtml(para) + '</p>'; })
+      .join('');
+  }
+
+  function renderHazards(data) {
+    var petType = petTypeSelect.value;
+    var seen = {};
+    var merged = [];
+
+    (window.PetData ? PetData.hazards(petType) : []).forEach(function (item) {
+      seen[item.label.toLowerCase()] = true;
+      merged.push(item);
     });
 
-    if (sort === 'rating') {
-      filteredShops.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-    } else if (sort === 'price') {
-      filteredShops.sort((a, b) => {
-        const priceA = parseFloat(a.price_range?.replace(/[^0-9.]/g, '')) || Infinity;
-        const priceB = parseFloat(b.price_range?.replace(/[^0-9.]/g, '')) || Infinity;
-        return priceA - priceB;
-      });
+    (data.hazards || []).forEach(function (item) {
+      if (!item || !item.label) return;
+      var key = String(item.label).toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      merged.push({ label: item.label, value: item.value });
+    });
+
+    if (!merged.length) {
+      hazardsBlock.classList.add('hidden');
+    } else {
+      hazardsBlock.classList.remove('hidden');
+      renderKeypoints(hazards, merged.slice(0, 6));
     }
 
-    currentPage = 1;
-    renderShops(filteredShops);
+    var notes = (data.warnings || []).filter(Boolean);
+    if (notes.length) {
+      warningsBlock.classList.remove('hidden');
+      warningsList.innerHTML = notes
+        .map(function (note) { return '<li>' + escapeHtml(note) + '</li>'; })
+        .join('');
+    } else {
+      warningsBlock.classList.add('hidden');
+      warningsList.innerHTML = '';
+    }
+
+    warnings.classList.remove('hidden');
   }
 
-  async function loadSources() {
-    const { petType, breed, location } = currentParams;
-    
-    if (!petType || !breed) {
-      showError('Missing breed or pet type. <a href="index.html">Go back to search</a>.');
+  function render(data) {
+    summaryEl.textContent = data.summary || '';
+    renderKeypoints(document.getElementById('feeding-keypoints'), data.feeding && data.feeding.keyPoints);
+    renderDetails('feeding-details', data.feeding && data.feeding.details);
+    renderKeypoints(document.getElementById('environment-keypoints'), data.environment && data.environment.keyPoints);
+    renderDetails('environment-details', data.environment && data.environment.details);
+    renderHazards(data);
+  }
+
+  /* -------------------------------------------------------------- sources */
+
+  function sourceBadge(shop) {
+    if (shop.type === 'shelter') return { text: 'Shelter or rescue', cls: 'badge-shelter' };
+    if (shop.place_id) return { text: 'Local seller', cls: 'badge-seller' };
+    return { text: 'Online listing', cls: 'badge-online' };
+  }
+
+  function mapsHref(shop) {
+    if (shop.gps_coordinates) {
+      return 'https://www.google.com/maps/search/?api=1&query=' +
+        shop.gps_coordinates.lat + ',' + shop.gps_coordinates.lng;
+    }
+    var q = [shop.name, shop.address].filter(Boolean).join(' ');
+    return q ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q) : '';
+  }
+
+  function renderSources(shops) {
+    sourcesError.classList.add('hidden');
+    sourcesEmpty.classList.add('hidden');
+    sourcesGrid.innerHTML = '';
+
+    if (!shops || !shops.length) {
+      sourcesEmpty.textContent = 'No sources found for that location yet. Try a nearby city or region.';
+      sourcesEmpty.classList.remove('hidden');
       return;
     }
 
-    sourcesTitle.textContent = breed;
-    petTypeName.textContent = petType;
-    if (location) {
-      locationDisplay.textContent = `Near: ${location}`;
+    // Shelters and rescues first, then best rated, then online listings.
+    var ordered = shops.slice().sort(function (a, b) {
+      var shelterA = a.type === 'shelter' ? 0 : 1;
+      var shelterB = b.type === 'shelter' ? 0 : 1;
+      if (shelterA !== shelterB) return shelterA - shelterB;
+      var ratingA = a.rating || 0;
+      var ratingB = b.rating || 0;
+      if (ratingA !== ratingB) return ratingB - ratingA;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
+    sourcesGrid.innerHTML = ordered.map(function (shop) {
+      var badge = sourceBadge(shop);
+      var stars = shop.rating
+        ? '<span class="source-rating" aria-label="Rated ' + shop.rating + ' out of 5">' +
+          '★ ' + shop.rating + (shop.reviews ? ' <span class="source-reviews">(' + shop.reviews + ')</span>' : '') +
+          '</span>'
+        : '';
+      var address = shop.address
+        ? '<p class="source-address">' + escapeHtml(shop.address) + '</p>'
+        : '';
+      var phone = shop.phone
+        ? '<a class="source-phone" href="tel:' + escapeHtml(shop.phone.replace(/\s/g, '')) + '">' +
+          escapeHtml(shop.phone) + '</a>'
+        : '';
+      var maps = mapsHref(shop);
+      var link = shop.url
+        ? '<a class="source-link" href="' + escapeHtml(shop.url) + '" target="_blank" rel="noopener noreferrer">Visit site</a>'
+        : (maps ? '<a class="source-link" href="' + escapeHtml(maps) + '" target="_blank" rel="noopener noreferrer">View map</a>' : '');
+      var caution = badge.cls === 'badge-shelter' ? '' :
+        '<p class="source-caution">Verify health records and visit before paying.</p>';
+
+      return '<article class="source-card">' +
+        '<div class="source-card-head">' +
+          '<h3 class="source-name">' + escapeHtml(shop.name || 'Unnamed') + '</h3>' +
+          '<span class="source-badge ' + badge.cls + '">' + badge.text + '</span>' +
+        '</div>' +
+        stars + address + phone +
+        (shop.snippet ? '<p class="source-snippet">' + escapeHtml(shop.snippet) + '</p>' : '') +
+        caution + link +
+        '</article>';
+    }).join('');
+  }
+
+  function loadSources(petType, breed, location) {
+    sourcesLocation = location || '';
+    sourcesGrid.innerHTML = '';
+    sourcesError.classList.add('hidden');
+    sourcesEmpty.classList.add('hidden');
+
+    if (!sourcesLocation) {
+      sourcesLocationPrompt.classList.remove('hidden');
+      sourcesLoading.classList.add('hidden');
+      return;
     }
+
+    sourcesLocationPrompt.classList.add('hidden');
+    sourcesLoading.classList.remove('hidden');
+
+    fetch('/api/pet-sources', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ petType: petType, breed: breed, location: sourcesLocation })
+    })
+      .then(function (res) {
+        return res.json().then(function (body) {
+          return { ok: res.ok, status: res.status, body: body };
+        });
+      })
+      .then(function (result) {
+        sourcesLoading.classList.add('hidden');
+        if (!result.ok) {
+          showSourcesError(result.status);
+          return;
+        }
+        renderSources(result.body.shops);
+      })
+      .catch(function () {
+        sourcesLoading.classList.add('hidden');
+        showSourcesError(0);
+      });
+  }
+
+  function showSourcesError(status) {
+    sourcesGrid.innerHTML = '';
+    var message = status === 429
+      ? 'Source search hit a rate limit. Try again in a minute.'
+      : 'Could not load nearby sources right now.';
+    sourcesError.innerHTML =
+      '<span>' + message + '</span> <button type="button" class="btn btn-small" id="sources-retry-btn">Try again</button>';
+    sourcesError.classList.remove('hidden');
+    var retry = document.getElementById('sources-retry-btn');
+    if (retry && lastRequest) {
+      retry.addEventListener('click', function () {
+        loadSources(lastRequest.petType, lastRequest.breed, sourcesLocation || sourcesLocationInput.value.trim());
+      });
+    }
+  }
+
+  /* -------------------------------------------------------------- submit  */
+
+  function submit(event) {
+    if (event) event.preventDefault();
+
+    var breed = validateBreed();
+    var weightState = validateWeight();
+
+    if (!breed || !weightState) {
+      formError.textContent = 'Check the highlighted field before searching.';
+      formError.classList.remove('hidden');
+      var firstBad = form.querySelector('[aria-invalid="true"]');
+      if (firstBad) firstBad.focus();
+      return;
+    }
+    formError.classList.add('hidden');
+
+    var request = {
+      petType: petTypeSelect.value,
+      breed: breed,
+      ageStage: ageSelect.value,
+      weight: weightState.weight,
+      weightUnit: weightState.weightUnit,
+      location: locationInput.value.trim()
+    };
+    lastRequest = request;
+    updateUrl(request);
 
     setLoading(true);
 
-    try {
-      const response = await fetch('/api/pet-sources', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ petType, breed, location })
+    fetch('/api/pet-info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    })
+      .then(function (res) {
+        return res.json()
+          .catch(function () { return {}; })
+          .then(function (body) { return { ok: res.ok, status: res.status, body: body }; });
+      })
+      .then(function (result) {
+        setLoading(false);
+        if (!result.ok) {
+          showError(describeError(result.status, result.body));
+          return;
+        }
+        hideError();
+        render(result.body);
+        sourcesSection.classList.remove('hidden');
+        results.classList.remove('hidden');
+        if (resultsHeading) resultsHeading.focus();
+        loadSources(request.petType, request.breed, request.location);
+      })
+      .catch(function () {
+        setLoading(false);
+        showError(ERROR_COPY.network);
       });
-      
-      const data = await response.json().catch(() => ({}));
-      
-      if (!response.ok) {
-        throw new Error(data.error || `Request failed with status ${response.status}`);
-      }
-      
-      allShops = data.shops || [];
-      filteredShops = [...allShops];
-      
-      console.log('Loaded shops:', allShops.length, allShops.map(s => ({ name: s.name, type: s.type })));
-      
-      applyFilters();
-      
-    } catch (error) {
-      console.error('Sources error:', error);
-      showError(`Failed to load sources: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
   }
 
-  typeFilter.addEventListener('change', applyFilters);
-  sortFilter.addEventListener('change', applyFilters);
-  prevPage.addEventListener('click', () => {
-    if (currentPage > 1) {
-      currentPage--;
-      renderShops(filteredShops);
-    }
+  /* ------------------------------------------------------------ wire-up   */
+
+  petTypeSelect.addEventListener('change', onPetTypeChange);
+
+  breedInput.addEventListener('input', function () {
+    if (breedInput.getAttribute('aria-invalid') === 'true') validateBreed();
   });
-  nextPage.addEventListener('click', () => {
-    const totalPages = Math.ceil(filteredShops.length / shopsPerPage);
-    if (currentPage < totalPages) {
-      currentPage++;
-      renderShops(filteredShops);
-    }
+  weightInput.addEventListener('input', function () {
+    if (weightInput.getAttribute('aria-invalid') === 'true') validateWeight();
   });
 
-  document.addEventListener('DOMContentLoaded', loadSources);
-}
+  form.addEventListener('submit', submit);
+  retryBtn.addEventListener('click', function () { if (lastRequest) submit(); });
 
-// Initialize based on page
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('Pet Care Guide initialized');
-  if (form) {
-    document.getElementById('pet-type').focus();
-  }
-});
+  sourcesLocationBtn.addEventListener('click', function () {
+    var value = sourcesLocationInput.value.trim();
+    if (!value) {
+      sourcesLocationInput.focus();
+      return;
+    }
+    locationInput.value = value;
+    if (lastRequest) {
+      lastRequest.location = value;
+      updateUrl(lastRequest);
+    }
+    loadSources(lastRequest ? lastRequest.petType : petTypeSelect.value,
+      lastRequest ? lastRequest.breed : breedInput.value.trim(), value);
+  });
+
+  // Restore state from the URL and run automatically when it is complete.
+  (function initFromUrl() {
+    var params = getUrlParams();
+    if (!params.petType || !params.breed) {
+      applyNoun('');
+      populateStages('');
+      return;
+    }
+    petTypeSelect.value = params.petType;
+    applyNoun(params.petType);
+    populateBreeds(params.petType);
+    populateStages(params.petType, params.ageStage);
+    breedInput.value = params.breed;
+    weightInput.value = params.weight;
+    weightUnitSelect.value = params.weightUnit || 'kg';
+    locationInput.value = params.location;
+    submit();
+  })();
+})();

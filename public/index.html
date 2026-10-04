@@ -3,16 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Personalized feeding and environment care guidance for any pet breed.">
-  <meta name="color-scheme" content="light dark">
-  <title>Pet Care Guide</title>
+  <title>Pet Care Guide | Feeding, Environment &amp; Safety Guidance by Breed</title>
+  <meta name="description" content="Free, vet-reviewed-style feeding and environment guidance for any pet breed. Tailored to life stage and weight, with safety hazards and local sources.">
+  <meta name="theme-color" content="#2d6a4f" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0c1f18" media="(prefers-color-scheme: dark)">
+  <link rel="canonical" href="https://pet-care-guide.vercel.app/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Pet Care Guide">
+  <meta property="og:title" content="Pet Care Guide | Feeding, Environment &amp; Safety Guidance by Breed">
+  <meta property="og:description" content="Personalized feeding and environment guidance for any pet breed, tailored to life stage and weight.">
+  <meta property="og:url" content="https://pet-care-guide.vercel.app/">
+  <meta property="og:image" content="https://pet-care-guide.vercel.app/og-image.svg">
+  <meta property="og:locale" content="en_US">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Pet Care Guide | Feeding, Environment &amp; Safety Guidance by Breed">
+  <meta name="twitter:description" content="Personalized feeding and environment guidance for any pet breed, tailored to life stage and weight.">
+  <meta name="twitter:image" content="https://pet-care-guide.vercel.app/og-image.svg">
+
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="favicon.svg">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Decorative animated background (canvas is injected by birds.js) -->
   <div class="aurora" aria-hidden="true"></div>
 
   <a class="skip-link" href="#pet-form">Skip to care search</a>
@@ -35,24 +55,24 @@
 
       <main class="main-content">
 
-        <!-- ============ PET TYPE + BREED + WHERE TO GET ============ -->
+        <!-- ============ SEARCH FORM ============ -->
         <form id="pet-form" class="pet-form glass-card" novalidate tabindex="-1">
           <div class="form-intro">
             <h2 class="form-title">Find care guidance</h2>
-            <p class="form-subtitle">Choose a pet type, tell us the breed, and add a location if you want nearby sources.</p>
+            <p class="form-subtitle">Choose a pet type, add the breed and life stage, and optionally a location for nearby sources.</p>
           </div>
 
           <div class="form-grid">
             <div class="form-group">
               <div class="field select-field" id="pet-type-field">
-                <select id="pet-type" name="petType" autocomplete="off">
+                <select id="pet-type" name="petType" autocomplete="off" aria-describedby="pet-type-hint">
                   <option value="">Select…</option>
                   <option value="Dog">🐶 Dog</option>
                   <option value="Cat">🐱 Cat</option>
                   <option value="Rabbit">🐰 Rabbit</option>
                   <option value="Bird">🦜 Bird</option>
                   <option value="Hamster">🐹 Hamster</option>
-                  <option value="Guinea Pig">🐹 Guinea Pig</option>
+                  <option value="Guinea Pig">🐖 Guinea Pig</option>
                   <option value="Reptile">🦎 Reptile</option>
                   <option value="Fish">🐠 Fish</option>
                   <option value="Horse">🐴 Horse</option>
@@ -62,27 +82,65 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </span>
               </div>
-              <p class="field-hint">Species of your companion</p>
+              <p class="field-hint" id="pet-type-hint">Species of your companion</p>
             </div>
 
             <div class="form-group">
-              <div class="field">
-                <input type="text" id="breed" name="breed" placeholder=" " maxlength="60" autocomplete="off" spellcheck="false" required>
-                <label for="breed">Breed</label>
+              <div class="field" id="breed-field">
+                <input type="text" id="breed" name="breed" placeholder=" " maxlength="60" autocomplete="off"
+                  spellcheck="false" aria-describedby="breed-hint breed-error" aria-invalid="false" list="breed-list">
+                <label for="breed" id="breed-label">Breed</label>
               </div>
-              <p class="field-hint">e.g. Golden Retriever, Siamese, Holland Lop</p>
+              <datalist id="breed-list"></datalist>
+              <p class="field-hint" id="breed-hint">Start typing for suggestions, or enter your own</p>
+              <p class="field-error hidden" id="breed-error" role="alert"></p>
             </div>
 
             <div class="form-group">
-              <div class="field">
-                <input type="text" id="location" name="location" placeholder=" " maxlength="80" autocomplete="off">
+              <div class="field select-field" id="age-field">
+                <select id="age-stage" name="ageStage" autocomplete="off" aria-describedby="age-hint">
+                  <option value="">Select…</option>
+                </select>
+                <label for="age-stage">Age / Life Stage</label>
+                <span class="select-chevron" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </span>
+              </div>
+              <p class="field-hint" id="age-hint">Tailors portions and advice</p>
+            </div>
+
+            <div class="form-group">
+              <div class="field-group-inline">
+                <div class="field" id="weight-field">
+                  <input type="text" id="weight" name="weight" placeholder=" " inputmode="decimal"
+                    maxlength="6" autocomplete="off" aria-describedby="weight-hint weight-error" aria-invalid="false">
+                  <label for="weight">Weight <span class="label-optional">(optional)</span></label>
+                </div>
+                <div class="field select-field unit-field" id="weight-unit-field">
+                  <select id="weight-unit" name="weightUnit" autocomplete="off" aria-label="Weight unit">
+                    <option value="kg">kg</option>
+                    <option value="lb">lb</option>
+                  </select>
+                  <span class="select-chevron" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </span>
+                </div>
+              </div>
+              <p class="field-hint" id="weight-hint">Used to scale portions</p>
+              <p class="field-error hidden" id="weight-error" role="alert"></p>
+            </div>
+
+            <div class="form-group">
+              <div class="field" id="location-field">
+                <input type="text" id="location" name="location" placeholder=" " maxlength="80" autocomplete="off"
+                  aria-describedby="location-hint">
                 <label for="location">Location <span class="label-optional">(optional)</span></label>
               </div>
-              <p class="field-hint">City or region, e.g. Portland, OR</p>
+              <p class="field-hint" id="location-hint">City or region, e.g. Portland, OR</p>
             </div>
           </div>
 
-          <button type="submit" id="submit-btn" class="btn btn-primary">
+          <button type="submit" id="submit-btn" class="btn btn-primary" aria-busy="false">
             <span class="btn-text">Get Care Info</span>
             <span class="spinner hidden" aria-hidden="true"></span>
           </button>
@@ -90,82 +148,142 @@
           <p id="form-error" class="form-error hidden" role="alert"></p>
         </form>
 
-        <!-- ============ SUMMARY ============ -->
-        <section id="results" class="results hidden" aria-live="polite" aria-label="Care guidance">
-          <div class="summary-card glass-card reveal">
-            <div class="summary-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 21s-7-4.6-7-9.6A4.4 4.4 0 0 1 12 8a4.4 4.4 0 0 1 7 3.4c0 5-7 9.6-7 9.6z"></path>
-              </svg>
-            </div>
-            <div>
-              <p id="summary" class="summary-text"></p>
-            </div>
+        <!-- ============ RESULTS ============ -->
+        <section id="results" class="results hidden" aria-labelledby="results-heading">
+          <h2 id="results-heading" class="visually-hidden" tabindex="-1">Your care guidance</h2>
+
+          <!-- Loading skeleton, shown while the request is in flight -->
+          <div id="results-loading" class="results-loading hidden" role="status">
+            <span class="visually-hidden">Loading care guidance…</span>
+            <div class="skeleton-block" aria-hidden="true"></div>
+            <div class="skeleton-block" aria-hidden="true"></div>
+            <div class="skeleton-block" aria-hidden="true"></div>
           </div>
 
-          <!-- ============ FEEDING ============ -->
-          <section class="info-card glass-card reveal" aria-labelledby="feeding-title">
-            <header class="info-card-head">
-              <span class="pill pill-feeding" aria-hidden="true">🍽️</span>
-              <h2 id="feeding-title" class="info-card-title">Feeding</h2>
-            </header>
-            <div id="feeding-keypoints" class="keypoint-grid"></div>
-            <button type="button" class="btn-read-more" data-target="feeding-details" aria-expanded="false" aria-controls="feeding-details">
-              <span class="read-more-text">Read more</span>
-              <span class="chevron" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-              </span>
-            </button>
-            <div id="feeding-details" class="details hidden"></div>
-          </section>
+          <div id="results-body" aria-live="polite">
 
-          <!-- ============ ENVIRONMENT ============ -->
-          <section class="info-card glass-card reveal" aria-labelledby="environment-title">
-            <header class="info-card-head">
-              <span class="pill pill-environment" aria-hidden="true">🏡</span>
-              <h2 id="environment-title" class="info-card-title">Environment</h2>
-            </header>
-            <div id="environment-keypoints" class="keypoint-grid"></div>
-            <button type="button" class="btn-read-more" data-target="environment-details" aria-expanded="false" aria-controls="environment-details">
-              <span class="read-more-text">Read more</span>
-              <span class="chevron" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-              </span>
-            </button>
-            <div id="environment-details" class="details hidden"></div>
-          </section>
+            <!-- ============ WORTH KNOWING (first) ============ -->
+            <section id="warnings" class="warnings-card hidden" aria-labelledby="warnings-title">
+              <header class="warnings-head">
+                <span class="pill pill-warning" aria-hidden="true">⚠️</span>
+                <h2 id="warnings-title" class="warnings-title">Worth knowing</h2>
+              </header>
 
-          <!-- ============ WARNINGS ============ -->
-          <section id="warnings" class="warnings-card hidden" aria-labelledby="warnings-title">
-            <header class="warnings-head">
-              <span class="pill pill-warning" aria-hidden="true">⚠️</span>
-              <h2 id="warnings-title" class="warnings-title">Worth knowing</h2>
-            </header>
-            <ul id="warnings-list" class="warnings-list"></ul>
-          </section>
+              <div id="hazards-block" class="hazards-block">
+                <h3 class="subhead" id="hazards-title">Toxic foods &amp; hazards</h3>
+                <div id="hazards" class="keypoint-grid" role="list" aria-labelledby="hazards-title"></div>
+              </div>
 
-          <!-- ============ WHERE TO GET ============ -->
-          <section id="sources-section" class="info-card glass-card sources-section hidden" aria-labelledby="sources-title" aria-live="polite">
-            <header class="info-card-head">
-              <span class="pill pill-sources" aria-hidden="true">📍</span>
-              <h2 id="sources-title" class="info-card-title">Where to Get</h2>
-            </header>
-            <p class="sources-hint">Online listings and local options found for this breed. Always verify sellers directly and consider adopting from a shelter or rescue.</p>
+              <div id="warnings-block">
+                <h3 class="subhead" id="warnings-subhead">Other cautions</h3>
+                <ul id="warnings-list" class="warnings-list" aria-labelledby="warnings-subhead"></ul>
+              </div>
+            </section>
 
-            <div id="sources-loading" class="sources-loading hidden">
-              <div class="skeleton-card"></div>
-              <div class="skeleton-card"></div>
-              <div class="skeleton-card"></div>
+            <!-- ============ SUMMARY ============ -->
+            <div class="summary-card glass-card reveal">
+              <div class="summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 21s-7-4.6-7-9.6A4.4 4.4 0 0 1 12 8a4.4 4.4 0 0 1 7 3.4c0 5-7 9.6-7 9.6z"></path>
+                </svg>
+              </div>
+              <div>
+                <p id="summary" class="summary-text"></p>
+                <p class="ai-note">
+                  <span aria-hidden="true">🤖</span>
+                  <span>AI-generated guidance. Double-check anything important with your vet.</span>
+                </p>
+              </div>
             </div>
 
-            <p id="sources-error" class="sources-error hidden" role="alert"></p>
+            <!-- ============ FEEDING ============ -->
+            <section class="info-card glass-card reveal" aria-labelledby="feeding-title">
+              <header class="info-card-head">
+                <span class="pill pill-feeding" aria-hidden="true">🍽️</span>
+                <h2 id="feeding-title" class="info-card-title">Feeding</h2>
+              </header>
+              <div id="feeding-keypoints" class="keypoint-grid" role="list"></div>
+              <button type="button" class="btn-read-more" data-target="feeding-details" data-label="feeding"
+                aria-expanded="false" aria-controls="feeding-details">
+                <span class="read-more-text">Read more about feeding</span>
+                <span class="chevron" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </span>
+              </button>
+              <div id="feeding-details" class="details hidden"></div>
+            </section>
 
-            <div id="sources-grid" class="source-grid"></div>
-          </section>
+            <!-- ============ ENVIRONMENT ============ -->
+            <section class="info-card glass-card reveal" aria-labelledby="environment-title">
+              <header class="info-card-head">
+                <span class="pill pill-environment" aria-hidden="true">🏡</span>
+                <h2 id="environment-title" class="info-card-title">Environment</h2>
+              </header>
+              <div id="environment-keypoints" class="keypoint-grid" role="list"></div>
+              <button type="button" class="btn-read-more" data-target="environment-details" data-label="environment"
+                aria-expanded="false" aria-controls="environment-details">
+                <span class="read-more-text">Read more about environment</span>
+                <span class="chevron" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </span>
+              </button>
+              <div id="environment-details" class="details hidden"></div>
+            </section>
+
+            <!-- ============ VET DISCLAIMER ============ -->
+            <p class="vet-note">
+              <span aria-hidden="true">🩺</span>
+              <span>This is general guidance, not veterinary advice. Confirm portion sizes, diets and any
+                medication or health question with your vet before changing your pet's routine.</span>
+            </p>
+
+            <!-- ============ WHERE TO GET ============ -->
+            <section id="sources-section" class="info-card glass-card sources-section hidden" aria-labelledby="sources-title">
+              <header class="info-card-head">
+                <span class="pill pill-sources" aria-hidden="true">📍</span>
+                <h2 id="sources-title" class="info-card-title">Where to Get</h2>
+              </header>
+              <p class="sources-hint">Shelters and rescues are listed first. Online listings and local sellers follow.</p>
+
+              <!-- Shown when no location was entered -->
+              <div id="sources-location-prompt" class="sources-location-prompt hidden">
+                <p id="sources-location-text">Add a location to see shelters, rescues and sellers near you.</p>
+                <div class="sources-location-row">
+                  <div class="field" id="sources-location-field">
+                    <input type="text" id="sources-location" placeholder=" " maxlength="80" autocomplete="off"
+                      aria-describedby="sources-location-hint">
+                    <label for="sources-location">City or region</label>
+                  </div>
+                  <button type="button" id="sources-location-btn" class="btn btn-primary">Show nearby sources</button>
+                </div>
+                <p class="field-hint" id="sources-location-hint">For example, Portland, OR</p>
+              </div>
+
+              <div class="trader-warning">
+                <strong>Buying from a breeder or marketplace?</strong>
+                <span>Verify the seller before paying. Ask to see the parents, request written health and
+                  vaccination records, avoid sellers who will not let you visit, and be wary of puppy-mill
+                  listings and payment requests made through chat or wire transfer. Adopting from a shelter or
+                  rescue is usually the safer option.</span>
+              </div>
+
+              <div id="sources-loading" class="sources-loading hidden">
+                <div class="skeleton-card"></div>
+                <div class="skeleton-card"></div>
+                <div class="skeleton-card"></div>
+              </div>
+
+              <p id="sources-error" class="sources-error hidden" role="alert"></p>
+
+              <div id="sources-empty" class="sources-empty hidden" role="status"></div>
+
+              <div id="sources-grid" class="source-grid"></div>
+            </section>
+          </div>
         </section>
 
         <!-- ============ ERROR STATE ============ -->
-        <section id="error-state" class="error-card glass-card hidden" role="alert">
+        <section id="error-state" class="error-card glass-card hidden" role="alert" aria-labelledby="error-title">
           <span class="error-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="9"></circle>
@@ -189,6 +307,7 @@
   </div>
 
   <script src="birds.js"></script>
+  <script src="pet-data.js"></script>
   <script src="ui.js"></script>
   <script src="script.js"></script>
 </body>
