@@ -55,6 +55,19 @@ const script = read('public/script.js');
 const server = read('server.js');
 
 /* ------------------------------------------------- 1. DOM id references */
+section('Parse check');
+// Parse every shipped script as a whole file. Without this, a stray brace
+// survives because the logic checks below only extract single functions.
+['server.js', 'public/script.js', 'public/ui.js', 'public/pet-data.js',
+  'public/sources.js', 'public/birds.js', 'scripts/generate-breed-pages.js'].forEach((file) => {
+  try {
+    new vm.Script(read(file), { filename: file });
+    ok(file + ' parses', true);
+  } catch (error) {
+    ok(file + ' parses: ' + error.message, false);
+  }
+});
+
 section('DOM references');
 const htmlIds = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
 

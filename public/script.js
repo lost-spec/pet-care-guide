@@ -132,8 +132,6 @@ function looksLikeGibberish(value) {
     }
     return false;
   }
-    return false;
-  }
 
   function setFieldError(input, errorId, message) {
     var error = document.getElementById(errorId);
