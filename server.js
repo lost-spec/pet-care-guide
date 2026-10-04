@@ -103,7 +103,7 @@ app.post('/api/pet-info', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error:', error.message);
-    res.status(500).json({ error: 'Failed to get pet care info. Please try again.' });
+    res.status(500).json({ error: error.message || 'Failed to get pet care info. Please try again.' });
   }
 });
 
