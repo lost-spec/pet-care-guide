@@ -44,7 +44,7 @@ surgery or diagnostic advice; advise consulting a vet instead.
 If the breed doesn't exist or isn't a real pet, return { "error": "Unknown breed" }.`;
 
 const NAME_REGEX = /^[A-Za-z\s-]{1,50}$/;
-const CONTEXT_REGEX = /^[A-Za-z0-9\s.,()'-]{1,60}$/;
+const CONTEXT_REGEX = /^[A-Za-z0-9\s.,()'+\-]{1,60}$/;
 
 function validateInput(petType, breed, extras = {}) {
   if (!petType || !breed) {
