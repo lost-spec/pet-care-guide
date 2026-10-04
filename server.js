@@ -39,9 +39,9 @@ function validateInput(petType, breed) {
 }
 
 async function callAI(petType, breed, retry = false) {
-  const baseUrl = process.env.LLM_BASE_URL || 'https://openrouter.ai/api/v1';
+  const baseUrl = process.env.LLM_BASE_URL || 'http://localhost:3001/v1';
   const apiKey = process.env.LLM_API_KEY;
-  const model = process.env.LLM_MODEL || 'google/gemma-4-31b-it:free';
+  const model = process.env.LLM_MODEL || 'nemotron-3-ultra';
   const extraHeaders = process.env.LLM_EXTRA_HEADERS ? JSON.parse(process.env.LLM_EXTRA_HEADERS) : {};
 
   const headers = {
