@@ -426,6 +426,23 @@ section('Dead code');
 // The full sources page must be reachable from the home page.
 ok('home page links to the full sources page', /href="\/sources\.html"/.test(html));
 ok('sources link carries the current search', /updateSourcesLink\(\)/.test(script));
+
+// It must read as a prominent destination, not a quiet inline link.
+const browseLink = (html.match(/<a[^>]*id="sources-browse-link"[^>]*>/) || [])[0] || '';
+ok('sources browse link is styled as a button', /class="[^"]*\bbtn\b/.test(browseLink), browseLink);
+ok('sources browse link uses the large button size', /\bbtn-large\b/.test(browseLink), browseLink);
+const largeRule = (css.match(/\.btn-large \{[^}]*\}/) || [])[0] || '';
+const primaryRule = (css.match(/\.btn-primary \{[^}]*\}/) || [])[0] || '';
+const largeH = parseFloat((largeRule.match(/min-height:\s*([\d.]+)rem/) || [])[1] || '0');
+const primaryH = parseFloat((primaryRule.match(/min-height:\s*([\d.]+)rem/) || [])[1] || '0');
+ok('large button is taller than the primary button', largeH > primaryH,
+  largeH + 'rem vs ' + primaryH + 'rem');
+ok('large button font is larger than the primary button font',
+  parseFloat((largeRule.match(/font-size:\s*([\d.]+)rem/) || [])[1] || '0') >
+  parseFloat((primaryRule.match(/font-size:\s*([\d.]+)rem/) || [])[1] || '0'));
+ok('anchor buttons do not get an underline', /a\.btn \{[^}]*text-decoration:\s*none/.test(css));
+ok('pill buttons keep their radius on focus',
+  /\.btn-primary:focus-visible \{[^}]*radius-pill/.test(css));
 ok('sources browse link has styles', /\.sources-browse\b/.test(css));
 
 // An unconfigured deployment must say so plainly rather than looking broken.
