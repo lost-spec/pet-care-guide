@@ -39,21 +39,24 @@ function validateInput(petType, breed) {
 }
 
 async function callAI(petType, breed, retry = false) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new Error('API key not configured');
+  const baseUrl = process.env.LLM_BASE_URL || 'https://openrouter.ai/api/v1';
+  const apiKey = process.env.LLM_API_KEY;
+  const model = process.env.LLM_MODEL || 'google/gemma-4-31b-it:free';
+  const extraHeaders = process.env.LLM_EXTRA_HEADERS ? JSON.parse(process.env.LLM_EXTRA_HEADERS) : {};
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...extraHeaders
+  };
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
   }
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://pet-care-guide.vercel.app',
-      'X-Title': 'Pet Care Guide'
-    },
+    headers,
     body: JSON.stringify({
-      model: 'google/gemma-4-31b-it:free',
+      model,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: `Pet type: ${petType}, Breed: ${breed}` }
