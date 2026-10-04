@@ -32,8 +32,8 @@
   };
 
   var LIMITS = {
-    desktop: { birds: 7, clouds: 3, leaves: 10 },
-    mobile: { birds: 3, clouds: 2, leaves: 5 },
+    desktop: { birds: 5, clouds: 3, leaves: 10 },
+    mobile: { birds: 2, clouds: 2, leaves: 5 },
     mobileBreakpoint: 768
   };
 
@@ -275,7 +275,7 @@
       ctx.scale(b.dir, 1);
 
       // far wing (behind body)
-      drawWing(b.wing, -s * 0.85, -lift * s * 0.55, s, 0.55);
+      drawWing(b.wing, -s * 0.46, -lift * s * 0.34, s, 0.55);
 
       // body
       ctx.beginPath();
@@ -313,7 +313,7 @@
       ctx.fill();
 
       // near wing (in front of body)
-      drawWing(b.wing, -s * 0.8, -lift * s * 0.7, s, 1);
+      drawWing(b.wing, -s * 0.44, -lift * s * 0.44, s, 1);
 
       ctx.restore();
     }
@@ -323,10 +323,11 @@
     ctx.save();
     ctx.globalAlpha = 0.85 * alphaScale;
     ctx.fillStyle = color;
+    // compact teardrop rather than a long spike
     ctx.beginPath();
-    ctx.moveTo(-s * 0.1, -s * 0.04);
-    ctx.quadraticCurveTo(span * 0.55, lift * s * 0.5 - s * 0.1, span, lift * s * 0.35);
-    ctx.quadraticCurveTo(span * 0.5, lift * s * 0.1 + s * 0.2, -s * 0.1, s * 0.16);
+    ctx.moveTo(-s * 0.2, -s * 0.02);
+    ctx.quadraticCurveTo(span * 0.55, -s * 0.14 + lift * s * 0.42, span, lift * s * 0.26);
+    ctx.quadraticCurveTo(span * 0.5, s * 0.06 + lift * s * 0.06 + s * 0.1, -s * 0.2, s * 0.12);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
