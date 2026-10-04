@@ -107,7 +107,9 @@
   function makeBird() {
     var depth = rand(1, 3);            // 1 = far/small, 3 = near/large
     var dir = Math.random() < 0.5 ? -1 : 1;
-    var speed = rand(0.25, 0.75) * (4 - depth) * 0.6;
+    // pixels per SECOND. Nearer birds (higher depth) travel faster, which
+    // reads as parallax. ~25-70 px/s crosses a screen in 20-55s.
+    var speed = rand(25, 48) * (4 - depth) * 0.55;
     var size = rand(9, 15) * (depth * 0.6);
     var y = rand(H * 0.08, H * 0.62);
 
@@ -138,7 +140,7 @@
       y: rand(H * 0.04, H * 0.38),
       depth: rand(1, 2.4),
       scale: scale,
-      speed: rand(3, 9),
+      speed: rand(7, 18),
       alpha: rand(0.35, 0.7),
       puffs: [
         { dx: -0.5, dy: 0.06, r: 0.42 },
@@ -173,8 +175,7 @@
     for (i = 0; i < birds.length; i++) {
       b = birds[i];
       b.x += b.speed * b.dir * dt;
-      b.baseY += Math.sin(t * b.bobRate + b.flapPhase) * 4 * dt;
-      b.y = b.baseY + Math.sin(t * b.bobRate * 1.3 + b.flapPhase) * b.bobAmp;
+      b.y = b.baseY + Math.sin(t * b.bobRate + b.flapPhase) * b.bobAmp;
 
       edge = b.size * 3;
       if (b.dir > 0 && b.x > W + edge) {

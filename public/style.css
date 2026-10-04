@@ -355,19 +355,20 @@ body {
 }
 
 .field input:focus + label,
-.field input:not(:placeholder-shown) + label {
+.field input:not(:placeholder-shown) + label,
+.select-field select:focus + label,
+.select-field.has-value label {
   transform: translateY(-0.72rem) scale(0.82);
   color: var(--accent);
 }
 
-/* Select */
-.select-wrap { position: relative; }
-
-.select-wrap select {
+/* Select — same box metrics as .field input so all three controls align */
+.select-field select {
   width: 100%;
-  padding: 0.95rem 2.6rem 0.95rem 0.95rem;
+  padding: 1.5rem 2.6rem 0.6rem 0.95rem;
   font: inherit;
   font-size: 0.98rem;
+  line-height: 1.6; /* match .field input so all three boxes are identical */
   color: var(--text-strong);
   background: var(--surface-strong);
   border: 1px solid var(--hairline);
@@ -379,16 +380,17 @@ body {
   transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 
-.select-wrap select:hover { border-color: var(--accent-soft); }
+.select-field select:hover { border-color: var(--accent-soft); }
 
-.select-wrap select:focus {
+.select-field select:focus {
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
   outline: none;
 }
 
-.select-wrap select:invalid,
-.select-wrap select option[value=""] { color: var(--text-muted); }
+/* Empty state: keep the placeholder-ish tone until a choice is made */
+.select-field select:invalid,
+.select-field select option[value=""] { color: var(--text-muted); }
 
 .select-chevron {
   position: absolute;

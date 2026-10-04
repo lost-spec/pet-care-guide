@@ -33,13 +33,18 @@
     targets.forEach(function (el) { io.observe(el); });
   }
 
-  /* ---- Select placeholder colour -------------------------------------- */
+  /* ---- Select: floating label + placeholder tone --------------------- */
   function initSelectState() {
     var select = document.getElementById('pet-type');
     if (!select) return;
 
+    var field = document.getElementById('pet-type-field') || select.closest('.field');
+
     var sync = function () {
-      select.style.color = select.value ? '' : 'var(--text-muted)';
+      var hasValue = !!select.value;
+      // `select` cannot use :placeholder-shown, so mirror it with a class
+      if (field) field.classList.toggle('has-value', hasValue);
+      select.style.color = hasValue ? '' : 'var(--text-muted)';
     };
 
     select.addEventListener('change', sync);
