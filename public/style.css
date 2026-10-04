@@ -1113,15 +1113,27 @@ a.btn-secondary { text-decoration: none; }
   .field input[aria-invalid="true"] { box-shadow: 0 0 0 3px rgba(226, 114, 91, 0.3); }
 }
 
-/* Weight + unit share one row */
+/* Weight + unit share one row. The unit box is a compact suffix control, not
+   a floating-label field, so it gets tight padding and centres against the
+   input instead of reserving an empty label gap. */
 .field-group-inline {
   display: grid;
-  grid-template-columns: 1fr 5.5rem;
+  grid-template-columns: 1fr 5.75rem;
   gap: 0.5rem;
-  align-items: end;
+  align-items: center;
 }
 
-.unit-field select { padding-left: 2.1rem; text-align: center; }
+/* Override the 2.6rem chevron gutter inherited from .select-field select,
+   which squeezed "kg" out of the box entirely. */
+.unit-field select {
+  padding: 0.7rem 1.45rem 0.7rem 0.6rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.unit-field .select-chevron { right: 0.45rem; }
+.unit-field .select-chevron svg { width: 0.9rem; height: 0.9rem; }
 
 /* Loading skeleton for the guidance area */
 .results-loading { display: grid; gap: 1rem; }
@@ -1294,7 +1306,7 @@ a.btn-secondary { text-decoration: none; }
 }
 
 @media (max-width: 640px) {
-  .field-group-inline { grid-template-columns: 1fr 5rem; }
+  .field-group-inline { grid-template-columns: 1fr 5.25rem; }
   .sources-location-row { grid-template-columns: 1fr; }
 }
 

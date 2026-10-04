@@ -252,12 +252,16 @@ function looksLikeGibberish(value) {
     results.classList.add('hidden');
     errorMessage.textContent = message;
     errorState.classList.remove('hidden');
+    // role=alert announces the message, but focus still has to travel there
+    // for keyboard users to reach Try again.
+    if (typeof errorState.focus === 'function') errorState.focus({ preventScroll: true });
     errorState.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   var ERROR_COPY = {
     network: 'Could not reach the server. Check your connection and try again.',
     invalidBreed: 'We could not match that breed. Try a common breed name, or choose “Mixed / Not sure”.',
+    invalidInput: 'The server rejected one of the fields. Check the breed, life stage and weight, then try again.',
     rateLimit: 'Too many requests just now. Wait about a minute, then try again.',
     noResults: 'No guidance came back for that pet. Try a different breed name.',
     server: 'The server ran into a problem generating guidance. Please try again.'
@@ -266,6 +270,7 @@ function looksLikeGibberish(value) {
   function describeError(status, body) {
     var message = body && body.error ? String(body.error) : '';
     if (status === 404 || /unknown breed/i.test(message)) return ERROR_COPY.invalidBreed;
+    if (status === 400) return ERROR_COPY.invalidInput;
     if (status === 429) return ERROR_COPY.rateLimit;
     if (status === 503) return ERROR_COPY.network;
     return ERROR_COPY.server;

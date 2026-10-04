@@ -43,7 +43,8 @@ surgery or diagnostic advice; advise consulting a vet instead.
 
 If the breed doesn't exist or isn't a real pet, return { "error": "Unknown breed" }.`;
 
-const NAME_REGEX = /^[A-Za-z\s-]{1,50}$/;
+// "/" is allowed so the "Mixed / Not sure" suggestion is not rejected.
+const NAME_REGEX = /^[A-Za-z\s/-]{1,50}$/;
 const CONTEXT_REGEX = /^[A-Za-z0-9\s.,()'+\-]{1,60}$/;
 
 function validateInput(petType, breed, extras = {}) {
@@ -54,7 +55,7 @@ function validateInput(petType, breed, extras = {}) {
     return 'petType and breed must be strings';
   }
   if (!NAME_REGEX.test(petType) || !NAME_REGEX.test(breed)) {
-    return 'Only letters, spaces, and hyphens allowed (max 50 characters)';
+    return 'Only letters, spaces, hyphens and slashes allowed (max 50 characters)';
   }
 
   const { ageStage, weight, weightUnit } = extras;

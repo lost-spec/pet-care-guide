@@ -224,6 +224,24 @@ ok('accepts full context',
 ok('empty optional fields are fine',
   validateInput('Dog', 'Poodle', { ageStage: '', weight: '', weightUnit: '' }) === null);
 
+/* -------------------------------------- 5b. suggestions survive the server */
+// Any value the datalist can offer must pass server validation, or picking it
+// from the list produces a 400 the user cannot act on.
+TYPES.forEach((type) => {
+  PetData.breeds(type).forEach((suggestion) => {
+    ok(type + ' suggestion "' + suggestion + '" is accepted by the server',
+      validateInput(type, suggestion) === null,
+      validateInput(type, suggestion) || '');
+  });
+  PetData.stages(type).forEach((stage) => {
+    ok(type + ' stage "' + stage + '" is accepted by the server',
+      validateInput(type, 'Test Breed', { ageStage: stage }) === null,
+      validateInput(type, 'Test Breed', { ageStage: stage }) || '');
+  });
+});
+ok('"Mixed / Not sure" is accepted', validateInput('Dog', 'Mixed / Not sure') === null);
+ok('a path-like value is still rejected', !!validateInput('Dog', '../../etc/passwd'));
+
 ok('lb converts to kg', Math.abs(toKg(10, 'lb') - 4.54) < 0.01, String(toKg(10, 'lb')));
 ok('kg passes through', toKg(12, 'kg') === 12);
 ok('missing weight is null', toKg('', 'kg') === null);
@@ -329,6 +347,37 @@ ok('sitemap lists breed pages', (sitemap.match(/<url>/g) || []).length === breed
 BREED_DIRS.forEach((dir) => {
   ok('sitemap covers /' + dir + '/', sitemap.includes('/' + dir + '/'));
 });
+
+/* --------------------------------------------------------- 10. CSS layout */
+section('CSS layout');
+const css = read('public/style.css');
+
+// The unit select inherits a 2.6rem chevron gutter from .select-field select.
+// In a narrow box that hides the text, so it must be overridden.
+const unitRule = (css.match(/\.unit-field select \{[^}]*\}/) || [])[0] || '';
+ok('unit select overrides inherited padding', /\bpadding:/.test(unitRule), unitRule);
+const baseGutter = (css.match(/\.select-field select \{[^}]*\}/) || [])[0] || '';
+const baseRight = (baseGutter.match(/padding:\s*[^;]*?([\d.]+)rem\s+[\d.]+rem/) || [])[1];
+const unitRight = (unitRule.match(/padding:[^;]*?([\d.]+)rem\s+([\d.]+)rem/) || [])[1];
+ok('unit select right padding is smaller than the base chevron gutter',
+  !baseRight || !unitRight || parseFloat(unitRight) < parseFloat(baseRight),
+  'base ' + baseRight + 'rem vs unit ' + unitRight + 'rem');
+ok('unit select is not centred with a large left pad',
+  !/text-align:\s*center/.test(unitRule), unitRule);
+
+const column = (css.match(/\.field-group-inline \{[^}]*grid-template-columns:\s*1fr\s+([\d.]+)rem/) || [])[1];
+if (column) {
+  const left = parseFloat((unitRule.match(/padding:[^;]*?[\d.]+rem\s+([\d.]+)rem/) || [])[1] || '0.6');
+  const right = parseFloat(unitRight || '1.45');
+  const contentRem = parseFloat(column) - left - right;
+  ok('unit box leaves room for "kg" at 0.95rem', contentRem > 1.2,
+    'column ' + column + 'rem minus ' + left + 'rem + ' + right + 'rem = ' + contentRem.toFixed(2) + 'rem');
+} else {
+  ok('unit column width is declared', false);
+}
+
+ok('inputs stay at 16px or larger',
+  /\.field input,\s*[\s\S]{0,80}font-size:\s*1rem/.test(css));
 
 console.log('\n' + (failures ? failures + ' of ' + checks + ' checks FAILED' : 'All ' + checks + ' checks passed'));
 process.exit(failures ? 1 : 0);
