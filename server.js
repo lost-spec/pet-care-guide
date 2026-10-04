@@ -123,6 +123,93 @@ app.post('/api/pet-info', async (req, res) => {
   }
 });
 
+async function searchPetSources(petType, breed, location = '') {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) {
+    throw new Error('SERPAPI_KEY environment variable is not set');
+  }
+
+  const query = `buy ${breed} ${petType} ${location ? `near ${location}` : ''} price shop breeder`;
+  const url = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&api_key=${apiKey}&engine=google&num=10`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(`SerpAPI error: ${response.status} ${JSON.stringify(error)}`);
+  }
+
+  const data = await response.json();
+  
+  const shops = [];
+  
+  if (data.local_results) {
+    for (const result of data.local_results.slice(0, 6)) {
+      shops.push({
+        name: result.title,
+        address: result.address || result.place_id_search || '',
+        phone: result.phone || '',
+        rating: result.rating || null,
+        reviews: result.reviews || null,
+        price_range: result.price || result.price_range || '',
+        url: result.link || result.website || '',
+        type: 'local'
+      });
+    }
+  }
+
+  if (data.organic_results) {
+    for (const result of data.organic_results.slice(0, 4)) {
+      if (shops.length >= 8) break;
+      shops.push({
+        name: result.title,
+        address: '',
+        phone: '',
+        rating: null,
+        reviews: null,
+        price_range: '',
+        url: result.link,
+        snippet: result.snippet,
+        type: 'organic'
+      });
+    }
+  }
+
+  if (data.shopping_results) {
+    for (const result of data.shopping_results.slice(0, 3)) {
+      if (shops.length >= 10) break;
+      shops.push({
+        name: result.title,
+        address: '',
+        phone: '',
+        rating: result.rating || null,
+        reviews: result.reviews || null,
+        price_range: result.price || '',
+        url: result.link,
+        type: 'shopping'
+      });
+    }
+  }
+
+  return { shops };
+}
+
+app.post('/api/pet-sources', async (req, res) => {
+  const { petType, breed, location } = req.body;
+
+  const validationError = validateInput(petType, breed);
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
+
+  try {
+    const result = await searchPetSources(petType, breed, location || '');
+    res.json(result);
+  } catch (error) {
+    console.error('Pet sources error:', error.message);
+    res.status(500).json({ error: error.message || 'Failed to find pet sources. Please try again.' });
+  }
+});
+
 // Only listen locally, not on Vercel
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
