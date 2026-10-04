@@ -44,13 +44,15 @@ async function callAI(petType, breed, retry = false) {
   const model = process.env.LLM_MODEL || 'google/gemma-4-31b-it:free';
   const extraHeaders = process.env.LLM_EXTRA_HEADERS ? JSON.parse(process.env.LLM_EXTRA_HEADERS) : {};
 
+  if (!apiKey) {
+    throw new Error('LLM_API_KEY environment variable is not set. Add it in Vercel Settings → Environment Variables.');
+  }
+
   const headers = {
     'Content-Type': 'application/json',
+    'Authorization': `Bearer ${apiKey}`,
     ...extraHeaders
   };
-  if (apiKey) {
-    headers['Authorization'] = `Bearer ${apiKey}`;
-  }
 
   // OpenRouter recommended headers
   if (baseUrl.includes('openrouter.ai')) {
