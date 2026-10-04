@@ -52,19 +52,24 @@ async function callAI(petType, breed, retry = false) {
     headers['Authorization'] = `Bearer ${apiKey}`;
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: `Pet type: ${petType}, Breed: ${breed}` }
-      ],
-      temperature: 0.3,
-      max_tokens: 1000
-    })
-  });
+  let response;
+  try {
+    response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: `Pet type: ${petType}, Breed: ${breed}` }
+        ],
+        temperature: 0.3,
+        max_tokens: 1000
+      })
+    });
+  } catch (fetchError) {
+    throw new Error(`Network error: ${fetchError.message}`);
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
