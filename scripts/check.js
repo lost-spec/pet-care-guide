@@ -267,5 +267,55 @@ ok('sources page retry is wired', /id="sources-retry"/.test(sourcesJs));
 [...sourcesHtml.matchAll(/<label for="([^"]+)"/g)]
   .forEach((m) => ok('sources label[for] -> #' + m[1], sourcesHtml.includes('id="' + m[1] + '"')));
 
+/* ----------------------------------------------------- 9. static breeds */
+section('Static breed pages');
+const BREED_DIRS = fs.readdirSync(path.join(ROOT, 'public'), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name);
+
+let breedPages = 0;
+BREED_DIRS.forEach((dir) => {
+  fs.readdirSync(path.join(ROOT, 'public', dir))
+    .filter((file) => file.endsWith('.html'))
+    .forEach((file) => {
+      breedPages++;
+      const pagePath = 'public/' + dir + '/' + file;
+      const page = read(pagePath);
+      const label = dir + '/' + file;
+
+      ok(label + ' has a title', /<title>[^<]{10,}<\/title>/.test(page));
+      ok(label + ' has a meta description', /name="description" content="[^"]{40,}"/.test(page));
+      ok(label + ' has canonical', /rel="canonical" href="https:\/\/pet-care-guide\.vercel\.app\/[^"]+"/.test(page));
+      ok(label + ' has og:title', /property="og:title"/.test(page));
+      ok(label + ' has twitter:card', /name="twitter:card"/.test(page));
+      ok(label + ' has favicon', /rel="icon"/.test(page));
+      ok(label + ' has lang', /<html lang="en">/.test(page));
+      ok(label + ' has one h1', (page.match(/<h1/g) || []).length === 1);
+      ok(label + ' links to the live form', /href="\/index\.html\?type=/.test(page));
+      ok(label + ' links to sources', /href="\/sources\.html\?type=/.test(page));
+      ok(label + ' carries a vet disclaimer', /class="vet-note"/.test(page));
+      ok(label + ' warns about sellers', /trader-warning|Verify health records/.test(page));
+      ok(label + ' has hazards', /Toxic foods|keypoint-label/.test(page));
+      ok(label + ' escapes its own slugs', !/\?type=\w+\s/.test(page));
+
+      // Every internal link must resolve to a file we actually ship.
+      [...page.matchAll(/(?:href|src)="(\/[a-z0-9\/-]+\.(?:html|css|js|svg|xml))"/g)]
+        .map((m) => m[1])
+        .forEach((href) => {
+          const clean = href.split('#')[0].split('?')[0];
+          ok(label + ' link ' + href + ' exists', fs.existsSync(path.join(ROOT, 'public', clean)));
+        });
+    });
+});
+
+ok('generated 10-15 breed pages', breedPages >= 10 && breedPages <= 15, 'got ' + breedPages);
+ok('sitemap exists', fs.existsSync(path.join(ROOT, 'public', 'sitemap.xml')));
+const sitemap = read('public/sitemap.xml');
+ok('sitemap lists the home page', /<loc>https:\/\/pet-care-guide\.vercel\.app\/<\/loc>/.test(sitemap));
+ok('sitemap lists breed pages', (sitemap.match(/<url>/g) || []).length === breedPages + 2);
+BREED_DIRS.forEach((dir) => {
+  ok('sitemap covers /' + dir + '/', sitemap.includes('/' + dir + '/'));
+});
+
 console.log('\n' + (failures ? failures + ' of ' + checks + ' checks FAILED' : 'All ' + checks + ' checks passed'));
 process.exit(failures ? 1 : 0);
