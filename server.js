@@ -126,7 +126,7 @@ app.post('/api/pet-info', async (req, res) => {
 async function searchPetSources(petType, breed, location = '') {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) {
-    throw new Error('SERPAPI_KEY environment variable is not set');
+    throw new Error('SERPAPI_KEY environment variable is not set. Add it in Vercel Settings → Environment Variables.');
   }
 
   const query = `buy ${breed} ${petType} ${location ? `near ${location}` : ''} price shop breeder`;
@@ -140,10 +140,16 @@ async function searchPetSources(petType, breed, location = '') {
 
   const data = await response.json();
   
+  // Debug log
+  console.log('SerpAPI response keys:', Object.keys(data));
+  console.log('local_results:', data.local_results?.length || 0);
+  console.log('organic_results:', data.organic_results?.length || 0);
+  console.log('shopping_results:', data.shopping_results?.length || 0);
+  
   const shops = [];
   
-  if (data.local_results) {
-    for (const result of data.local_results.slice(0, 6)) {
+  if (data.local_results && data.local_results.length > 0) {
+    for (const result of data.local_results.slice(0, 10)) {
       shops.push({
         name: result.title,
         address: result.address || result.place_id_search || '',
@@ -152,14 +158,33 @@ async function searchPetSources(petType, breed, location = '') {
         reviews: result.reviews || null,
         price_range: result.price || result.price_range || '',
         url: result.link || result.website || '',
-        type: 'local'
+        type: 'local',
+        place_id: result.place_id || '',
+        gps_coordinates: result.gps_coordinates || null,
+        hours: result.hours || null
       });
     }
   }
 
-  if (data.organic_results) {
-    for (const result of data.organic_results.slice(0, 4)) {
-      if (shops.length >= 8) break;
+  if (data.shopping_results && data.shopping_results.length > 0) {
+    for (const result of data.shopping_results.slice(0, 10)) {
+      shops.push({
+        name: result.title,
+        address: '',
+        phone: '',
+        rating: result.rating || null,
+        reviews: result.reviews || null,
+        price_range: result.price || '',
+        url: result.link,
+        type: 'shopping',
+        source: result.source || '',
+        delivery: result.delivery || null
+      });
+    }
+  }
+
+  if (data.organic_results && data.organic_results.length > 0) {
+    for (const result of data.organic_results.slice(0, 10)) {
       shops.push({
         name: result.title,
         address: '',
@@ -169,28 +194,17 @@ async function searchPetSources(petType, breed, location = '') {
         price_range: '',
         url: result.link,
         snippet: result.snippet,
-        type: 'organic'
+        type: 'organic',
+        displayed_link: result.displayed_link || ''
       });
     }
   }
 
-  if (data.shopping_results) {
-    for (const result of data.shopping_results.slice(0, 3)) {
-      if (shops.length >= 10) break;
-      shops.push({
-        name: result.title,
-        address: '',
-        phone: '',
-        rating: result.rating || null,
-        reviews: result.reviews || null,
-        price_range: result.price || '',
-        url: result.link,
-        type: 'shopping'
-      });
-    }
-  }
-
-  return { shops };
+  return { 
+    shops,
+    search_metadata: data.search_metadata || {},
+    query: query
+  };
 }
 
 app.post('/api/pet-sources', async (req, res) => {

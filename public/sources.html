@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pet Sources - Pet Care Guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Pet Care Guide</h1>
+      <p class="tagline">Where to find your pet</p>
+    </header>
+    <main>
+      <div class="sources-header">
+        <div class="breadcrumb">
+          <a href="index.html">← Back to Search</a>
+        </div>
+        <h2 id="sources-title">Sources for <span id="breed-name"></span> (<span id="pet-type-name"></span>)</h2>
+        <p id="location-display" class="location-display"></p>
+        <p class="sources-disclaimer">Results from web search. Verify details directly with sellers. Adoption is a great option — check local shelters!</p>
+      </div>
+
+      <div class="filters-bar">
+        <div class="filter-group">
+          <label for="type-filter">Filter by type:</label>
+          <select id="type-filter">
+            <option value="all">All</option>
+            <option value="local">Local Shops/Breeders</option>
+            <option value="shopping">Online Stores</option>
+            <option value="organic">Web Results</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="sort-filter">Sort by:</label>
+          <select id="sort-filter">
+            <option value="relevance">Relevance</option>
+            <option value="rating">Rating (High to Low)</option>
+            <option value="price">Price (Low to High)</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="sources-loading" class="sources-loading">
+        <span class="spinner-small" aria-hidden="true"></span>
+        <span>Loading sources...</span>
+      </div>
+
+      <p id="sources-error" class="sources-error hidden" role="alert"></p>
+
+      <div id="sources-grid" class="sources-grid"></div>
+
+      <div id="no-results" class="no-results hidden">
+        <p>No sources found. Try a different location or check local shelters.</p>
+        <a href="index.html" class="btn-primary">New Search</a>
+      </div>
+
+      <div id="pagination" class="pagination hidden">
+        <button id="prev-page" class="btn-secondary">Previous</button>
+        <span id="page-info">Page 1 of 1</span>
+        <button id="next-page" class="btn-secondary">Next</button>
+      </div>
+    </main>
+    <footer>
+      <p class="disclaimer">General guidance only. Consult a vet for specific health or diet decisions.</p>
+      <p class="copyright">&copy; 2026 Pet Care Guide</p>
+    </footer>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
