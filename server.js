@@ -39,9 +39,9 @@ function validateInput(petType, breed) {
 }
 
 async function callAI(petType, breed, retry = false) {
-  const baseUrl = process.env.LLM_BASE_URL || 'https://openrouter.ai/api/v1';
+  const baseUrl = process.env.LLM_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/';
   const apiKey = process.env.LLM_API_KEY;
-  const model = process.env.LLM_MODEL || 'google/gemma-4-26b-a4b-it:free';
+  const model = process.env.LLM_MODEL || 'gemini-1.5-flash';
   const extraHeaders = process.env.LLM_EXTRA_HEADERS ? JSON.parse(process.env.LLM_EXTRA_HEADERS) : {};
 
   if (!apiKey) {
@@ -53,12 +53,6 @@ async function callAI(petType, breed, retry = false) {
     'Authorization': `Bearer ${apiKey}`,
     ...extraHeaders
   };
-
-  // OpenRouter recommended headers
-  if (baseUrl.includes('openrouter.ai')) {
-    headers['HTTP-Referer'] = process.env.HTTP_REFERER || 'https://pet-care-guide.vercel.app';
-    headers['X-Title'] = process.env.X_TITLE || 'Pet Care Guide';
-  }
 
   let response;
   try {
