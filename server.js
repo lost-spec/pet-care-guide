@@ -41,7 +41,7 @@ function validateInput(petType, breed) {
 async function callAI(petType, breed, retry = false) {
   const baseUrl = process.env.LLM_BASE_URL || 'https://openrouter.ai/api/v1';
   const apiKey = process.env.LLM_API_KEY;
-  const model = process.env.LLM_MODEL || 'qwen/qwen3-7-plus:free';
+  const model = process.env.LLM_MODEL || 'dots-studio/dots-3-note-preview:free';
   const extraHeaders = process.env.LLM_EXTRA_HEADERS ? JSON.parse(process.env.LLM_EXTRA_HEADERS) : {};
 
   if (!apiKey) {
