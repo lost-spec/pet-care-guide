@@ -742,13 +742,6 @@ a.btn-secondary { text-decoration: none; }
   box-shadow: var(--shadow-md);
 }
 
-.source-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.6rem;
-}
-
 .source-name {
   margin: 0;
   font-family: var(--font-display);
@@ -757,30 +750,14 @@ a.btn-secondary { text-decoration: none; }
   color: var(--text-strong);
 }
 
-.source-type {
-  flex: none;
-  padding: 0.15rem 0.6rem;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  border-radius: var(--radius-pill);
-  background: var(--surface-sunken);
-  color: var(--accent-strong);
-  border: 1px solid var(--hairline);
-}
-.source-type.local { background: rgba(64, 145, 108, 0.18); color: var(--green-800); }
-.source-type.shopping { background: rgba(245, 185, 66, 0.22); color: #8a5a12; }
-.source-type.organic { background: rgba(149, 213, 178, 0.28); color: var(--green-800); }
-
-@media (prefers-color-scheme: dark) {
-  .source-type.local,
-  .source-type.organic { color: var(--green-200); }
-  .source-type.shopping { color: var(--amber-300); }
+/* Higher specificity than `.source-card p` so the snippet reads as body copy
+   without needing !important. */
+.source-card p.source-snippet {
+  color: var(--text-body);
+  margin-top: 0.4rem;
 }
 
 .source-card p { margin: 0; font-size: 0.86rem; color: var(--text-muted); }
-.source-snippet { color: var(--text-body) !important; }
 
 .source-rating .stars { color: var(--amber-400); letter-spacing: 0.05em; }
 
@@ -898,20 +875,28 @@ a.btn-secondary { text-decoration: none; }
   color: var(--text-strong);
 }
 
+.sources-browse {
+  margin: 0 0 0.9rem;
+  font-size: 0.9rem;
+}
+
+.sources-browse a {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.sources-browse-note {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
 .location-display {
   margin: 0;
   font-size: 0.92rem;
   font-weight: 600;
   color: var(--accent-strong);
-}
-
-.sources-disclaimer {
-  margin: 0;
-  padding: 0.75rem 1rem;
-  font-size: 0.86rem;
-  color: var(--text-muted);
-  background: var(--surface-sunken);
-  border-radius: var(--radius-md);
 }
 
 .filters-bar {

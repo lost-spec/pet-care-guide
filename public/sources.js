@@ -31,10 +31,14 @@
   var breed = params.get('breed') || '';
   var location = params.get('location') || '';
 
+  // Escaping and map links live in utils.js so both pages handle API strings
+  // identically.
   function escapeHtml(value) {
-    return String(value == null ? '' : value)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return window.PetGuide.escapeHtml(value);
+  }
+
+  function mapsHref(shop) {
+    return window.PetGuide.mapsHref(shop);
   }
 
   breedNameEl.textContent = breed || 'your pet';
@@ -49,14 +53,7 @@
     return { text: 'Online listing', cls: 'badge-online' };
   }
 
-  function mapsHref(shop) {
-    if (shop.gps_coordinates) {
-      return 'https://www.google.com/maps/search/?api=1&query=' +
-        shop.gps_coordinates.lat + ',' + shop.gps_coordinates.lng;
-    }
-    var q = [shop.name, shop.address].filter(Boolean).join(' ');
-    return q ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q) : '';
-  }
+  
 
   function cardHtml(shop) {
     var tag = badge(shop);

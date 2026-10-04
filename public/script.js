@@ -52,13 +52,13 @@
 
   /* ---------------------------------------------------------------- utils */
 
+  // Escaping lives in utils.js so both pages handle API strings identically.
   function escapeHtml(value) {
-    return String(value == null ? '' : value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+    return window.PetGuide.escapeHtml(value);
+  }
+
+  function mapsHref(shop) {
+    return window.PetGuide.mapsHref(shop);
   }
 
   function isMobile() {
@@ -263,7 +263,6 @@ function looksLikeGibberish(value) {
     invalidBreed: 'We could not match that breed. Try a common breed name, or choose “Mixed / Not sure”.',
     invalidInput: 'The server rejected one of the fields. Check the breed, life stage and weight, then try again.',
     rateLimit: 'Too many requests just now. Wait about a minute, then try again.',
-    noResults: 'No guidance came back for that pet. Try a different breed name.',
     server: 'The server ran into a problem generating guidance. Please try again.'
   };
 
@@ -299,6 +298,18 @@ function looksLikeGibberish(value) {
       .filter(Boolean)
       .map(function (para) { return '<p>' + escapeHtml(para) + '</p>'; })
       .join('');
+  }
+
+  // Carry the current search across to the full sources page.
+  function updateSourcesLink() {
+    var link = document.getElementById('sources-browse-link');
+    if (!link) return;
+    var params = new URLSearchParams();
+    if (petTypeSelect.value) params.set('type', petTypeSelect.value);
+    if (breedInput.value.trim()) params.set('breed', breedInput.value.trim());
+    if (locationInput.value.trim()) params.set('location', locationInput.value.trim());
+    var query = params.toString();
+    link.href = '/sources.html' + (query ? '?' + query : '');
   }
 
   function renderHazards(data) {
@@ -341,6 +352,7 @@ function looksLikeGibberish(value) {
   }
 
   function render(data) {
+    updateSourcesLink();
     summaryEl.textContent = data.summary || '';
     renderKeypoints(document.getElementById('feeding-keypoints'), data.feeding && data.feeding.keyPoints);
     renderDetails('feeding-details', data.feeding && data.feeding.details);
@@ -357,14 +369,7 @@ function looksLikeGibberish(value) {
     return { text: 'Online listing', cls: 'badge-online' };
   }
 
-  function mapsHref(shop) {
-    if (shop.gps_coordinates) {
-      return 'https://www.google.com/maps/search/?api=1&query=' +
-        shop.gps_coordinates.lat + ',' + shop.gps_coordinates.lng;
-    }
-    var q = [shop.name, shop.address].filter(Boolean).join(' ');
-    return q ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q) : '';
-  }
+  
 
   function renderSources(shops) {
     sourcesError.classList.add('hidden');

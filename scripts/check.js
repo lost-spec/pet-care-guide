@@ -379,5 +379,93 @@ if (column) {
 ok('inputs stay at 16px or larger',
   /\.field input,\s*[\s\S]{0,80}font-size:\s*1rem/.test(css));
 
+/* ------------------------------------------ 10b. no duplicated page logic */
+section('Shared helpers');
+
+// Escaping untrusted SerpAPI strings must have exactly one implementation.
+const utils = read('public/utils.js');
+['index.html', 'sources.html'].forEach((page) => {
+  const html = read('public/' + page);
+  ok(page + ' loads utils.js', /<script src="utils\.js"><\/script>/.test(html));
+  const before = html.indexOf('utils.js');
+  ok(page + ' loads utils.js before its page script',
+    before > -1 && before < html.indexOf('script.js') ||
+    before > -1 && before < html.indexOf('sources.js'));
+});
+ok('utils.js defines escapeHtml and mapsHref once each',
+  (utils.match(/PetGuide\.escapeHtml =/g) || []).length === 1 &&
+  (utils.match(/PetGuide\.mapsHref =/g) || []).length === 1);
+ok('utils.js escapes all five dangerous characters',
+  /&amp;/.test(utils) && /&lt;/.test(utils) && /&gt;/.test(utils) && /&quot;/.test(utils) && /&#39;/.test(utils));
+
+const pageScripts = { 'script.js': read('public/script.js'), 'sources.js': read('public/sources.js') };
+Object.keys(pageScripts).forEach((file) => {
+  const code = pageScripts[file];
+  ok(file + ' declares escapeHtml once', (code.match(/function escapeHtml\(/g) || []).length === 1);
+  ok(file + ' declares mapsHref once', (code.match(/function mapsHref\(/g) || []).length === 1);
+  ok(file + ' delegates escaping to utils.js', /return window\.PetGuide\.escapeHtml\(/.test(code));
+  ok(file + ' delegates map links to utils.js', /return window\.PetGuide\.mapsHref\(/.test(code));
+  // Escaping has one implementation, so the entity replacements live only in
+  // utils.js. Other .replace() calls (phone digits, gibberish checks) are fine.
+  ok(file + ' does not inline HTML entity escaping',
+    !/&amp;|&quot;|&#39;/.test(code));
+});
+
+// Maps links built from API data must not interpolate raw values into a URL.
+// Strip the already-encoded calls first, so the raw pattern inside
+// encodeURIComponent(...) is not mistaken for an unencoded one.
+const utilsUnencoded = utils.replace(/encodeURIComponent\([^)]*\)/g, 'ENCODED');
+ok('map coordinates are URL-encoded, not interpolated raw',
+  !/gps_coordinates\.(lat|lng)\s*\+/.test(utilsUnencoded),
+  (utilsUnencoded.match(/gps_coordinates\.[^\n]*/) || [])[0] || '');
+ok('shop text in map links is URL-encoded',
+  /encodeURIComponent\(q\)/.test(utils));
+
+/* ------------------------------------------------- 10c. no dead references */
+section('Dead code');
+// The full sources page must be reachable from the home page.
+ok('home page links to the full sources page', /href="\/sources\.html"/.test(html));
+ok('sources link carries the current search', /updateSourcesLink\(\)/.test(script));
+ok('sources browse link has styles', /\.sources-browse\b/.test(css));
+
+// Class names can arrive from JS template strings, so scan every shipped
+// HTML and JS file rather than markup alone.
+const allPublic = [];
+(function walk(dir) {
+  fs.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(full);
+    else if (/\.(html|js)$/.test(entry.name)) allPublic.push(fs.readFileSync(full, 'utf8'));
+  });
+})(path.join(ROOT, 'public'));
+const publicSource = allPublic.join('\n');
+
+// Classes rendered by the current source card must keep their styling.
+['source-name', 'source-snippet', 'source-badge', 'source-caution', 'source-address']
+  .forEach((cls) => {
+    ok('.' + cls + ' is used', new RegExp(cls).test(publicSource));
+    ok('.' + cls + ' is styled', new RegExp('\\.' + cls + '\\b').test(css));
+  });
+
+// Classes left over from the old sources page must be gone from both sides.
+['source-header', 'source-type', 'sources-disclaimer']
+  .forEach((cls) => {
+    ok('dead class .' + cls + ' is not styled', !new RegExp('\\.' + cls + '\\b').test(css));
+    ok('dead class .' + cls + ' is not in markup', !new RegExp(cls).test(publicSource));
+  });
+
+// Specificity, not !important, should carry the snippet colour.
+ok('source snippet colour is set by specificity, not !important',
+  /\.source-card p\.source-snippet \{[^}]*color:/.test(css) &&
+  !/\.source-card p\.source-snippet \{[^}]*!important/.test(css));
+
+const errorCopy = (script.match(/var ERROR_COPY = \{([\s\S]*?)\n  \}/) || [])[1] || '';
+const errorKeys = [...errorCopy.matchAll(/^\s{4}(\w+):/gm)].map((m) => m[1]);
+ok('error messages are defined', errorKeys.length > 0);
+errorKeys.forEach((key) => {
+  const uses = (script.match(new RegExp('ERROR_COPY\\.' + key + '\\b', 'g')) || []).length;
+  ok('error message "' + key + '" is used', uses > 0, 'defined but never referenced');
+});
+
 console.log('\n' + (failures ? failures + ' of ' + checks + ' checks FAILED' : 'All ' + checks + ' checks passed'));
 process.exit(failures ? 1 : 0);
