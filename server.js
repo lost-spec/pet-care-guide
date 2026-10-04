@@ -39,7 +39,7 @@ function validateInput(petType, breed) {
 }
 
 async function callAI(petType, breed, retry = false) {
-  const baseUrl = process.env.LLM_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/';
+  const baseUrl = process.env.LLM_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai';
   const apiKey = process.env.LLM_API_KEY;
   const model = process.env.LLM_MODEL || 'gemini-1.5-flash';
   const extraHeaders = process.env.LLM_EXTRA_HEADERS ? JSON.parse(process.env.LLM_EXTRA_HEADERS) : {};
@@ -81,7 +81,7 @@ async function callAI(petType, breed, retry = false) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(`API error: ${response.status} ${JSON.stringify(error)}`);
+    throw new Error(`API error: ${response.status} ${JSON.stringify(error)} | URL: ${baseUrl}/chat/completions`);
   }
 
   const data = await response.json();
