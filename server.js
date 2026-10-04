@@ -41,7 +41,7 @@ function validateInput(petType, breed) {
 async function callAI(petType, breed, retry = false) {
   const baseUrl = process.env.LLM_BASE_URL || 'https://api.groq.com/openai/v1';
   const apiKey = process.env.LLM_API_KEY;
-  const model = process.env.LLM_MODEL || 'gemma2-9b-it';
+  const model = process.env.LLM_MODEL || 'qwen-2.5-32b';
   const extraHeaders = process.env.LLM_EXTRA_HEADERS ? JSON.parse(process.env.LLM_EXTRA_HEADERS) : {};
 
   if (!apiKey) {
