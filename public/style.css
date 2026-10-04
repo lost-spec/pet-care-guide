@@ -827,6 +827,54 @@ a.btn-secondary { text-decoration: none; }
   box-shadow: var(--focus-ring);
 }
 
+/* A control that cannot do the :placeholder-shown trick (date, textarea) needs
+   its label to sit above it in normal flow. `.field label` is absolutely
+   positioned for the floating labels, so this must undo that or the label lands
+   on top of the value. */
+.field-static label {
+  position: static;
+  display: block;
+  margin-bottom: 0.35rem;
+  transform: none;
+}
+
+.field-static input {
+  padding-top: 0.7rem;
+}
+
+.tracker-gate-text {
+  margin: 0;
+  color: var(--text-body);
+  font-size: 0.98rem;
+  line-height: 1.6;
+}
+
+.tracker-gate-text + .tracker-gate-text {
+  margin-top: 0.6rem;
+}
+
+.tracker-gate-hint {
+  color: var(--text-muted) !important;
+  font-size: 0.9rem !important;
+}
+
+.tracker-actions-start {
+  justify-content: flex-start;
+}
+
+.tracker-diet {
+  margin: 0;
+  color: var(--text-body);
+  font-size: 0.98rem;
+  line-height: 1.65;
+}
+
+.tracker-diet-caveat {
+  margin-top: 0.7rem;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
 .tracker-notes { margin-top: 1.2rem; }
 
 .tracker-notes-label {

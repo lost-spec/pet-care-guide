@@ -1,115 +1,114 @@
-/* Daily care tracker.
-   Everything lives in localStorage: the app has no accounts and no database,
-   so this is deliberately device-local rather than uploaded anywhere. */
 (function () {
   'use strict';
 
   var STORAGE_KEY = 'petCareGuide.tracker.v1';
-  var CHECK_KEYS = ['fed', 'water', 'exercise', 'wash', 'meds', 'potty'];
-  var WEEK_DAYS = 7;
+  var PET_KEY = 'petCareGuide.pet.v1';
 
-  var el = {
-    petName: document.getElementById('pet-name'),
-    petType: document.getElementById('pet-type'),
-    petDiet: document.getElementById('pet-diet'),
-    petCalorieTarget: document.getElementById('pet-calorie-target'),
-    profileSummary: document.getElementById('profile-summary'),
-    entryDate: document.getElementById('entry-date'),
-    entryRel: document.getElementById('entry-rel'),
-    calories: document.getElementById('entry-calories'),
-    minutes: document.getElementById('entry-minutes'),
-    weight: document.getElementById('entry-weight'),
-    weightUnit: document.getElementById('entry-weight-unit'),
-    notes: document.getElementById('entry-notes'),
-    saveStatus: document.getElementById('save-status'),
-    clearDay: document.getElementById('clear-day-btn'),
-    clearAll: document.getElementById('clear-all-btn'),
-    weekStrip: document.getElementById('week-strip'),
-    weekEmpty: document.getElementById('week-empty'),
-    weekStats: document.getElementById('week-stats'),
-    statFed: document.getElementById('stat-fed'),
-    statExercise: document.getElementById('stat-exercise'),
-    statCalories: document.getElementById('stat-calories'),
-    statStreak: document.getElementById('stat-streak'),
-    warning: document.getElementById('tracker-warning'),
-    storageNote: document.getElementById('storage-note')
-  };
+  // Declared first so the data-layer slice exercised by scripts/check.js covers
+  // the escaping helper too. Pet names are user input and end up in innerHTML.
+  function escapeHtml(value) {
+    if (window.PetGuide && typeof window.PetGuide.escapeHtml === 'function') {
+      return window.PetGuide.escapeHtml(value);
+    }
+    return String(value === null || value === undefined ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
 
-  var boxes = {};
-  CHECK_KEYS.forEach(function (key) {
-    boxes[key] = document.querySelector('input[data-key="' + key + '"]');
-  });
-
-  /* ------------------------------------------------------------ storage */
-
-  var storageWorks = true;
+  /* ------------------------------------------------------------ data layer */
 
   function blankEntry() {
-    return {
-      fed: false, water: false, exercise: false,
-      wash: false, meds: false, potty: false,
-      calories: '', minutes: '', weight: '', weightUnit: 'kg', notes: ''
-    };
+    return { calories: '', minutes: '', weight: '', weightUnit: 'kg', notes: '' };
   }
 
   function blankState() {
-    return { version: 1, profile: { name: '', type: '', diet: '', calorieTarget: '' }, entries: {} };
+    return {
+      version: 1,
+      profile: { name: '', petType: '', breed: '', ageStage: '', diet: '', calorieTarget: '' },
+      entries: {}
+    };
   }
 
-  // Merge stored data over a blank shape so an older or partial record can
-  // never leave a field undefined.
-  function normalise(raw) {
-    var base = blankState();
-    if (!raw || typeof raw !== 'object') return base;
-    if (raw.profile && typeof raw.profile === 'object') {
-      base.profile.name = String(raw.profile.name || '').slice(0, 40);
-      base.profile.type = String(raw.profile.type || '');
-      base.profile.diet = String(raw.profile.diet || '').slice(0, 80);
-      base.profile.calorieTarget = numberOrBlank(raw.profile.calorieTarget, 0, 5000);
+  // Null when pet-data.js is unavailable, so validation is skipped rather than
+  // throwing. The tracker is only ever rendered with pet-data.js loaded.
+  function knownTypes() {
+    if (!window.PetData || typeof window.PetData.types !== 'function') return null;
+    try {
+      var list = window.PetData.types();
+      return list && list.length ? list : null;
+    } catch (err) {
+      return null;
     }
-    if (raw.entries && typeof raw.entries === 'object') {
-      Object.keys(raw.entries).forEach(function (date) {
-        if (!isIsoDate(date)) return;
-        var entry = blankEntry();
-        var stored = raw.entries[date] || {};
-        CHECK_KEYS.forEach(function (key) { entry[key] = stored[key] === true; });
-        entry.calories = numberOrBlank(stored.calories, 0, 5000);
-        entry.minutes = numberOrBlank(stored.minutes, 0, 600);
-        entry.weight = numberOrBlank(stored.weight, 0, 2000);
-        entry.weightUnit = stored.weightUnit === 'lb' ? 'lb' : 'kg';
-        entry.notes = String(stored.notes || '').slice(0, 500);
-        base.entries[date] = entry;
-      });
-    }
-    return base;
+  }
+
+  function cleanText(value, max) {
+    if (value === null || value === undefined) return '';
+    return String(value).replace(/\s+/g, ' ').trim().slice(0, max);
   }
 
   function numberOrBlank(value, min, max) {
     if (value === '' || value === null || value === undefined) return '';
     var num = Number(value);
     if (!isFinite(num)) return '';
-    return String(Math.min(Math.max(num, min), max));
+    num = Math.min(max, Math.max(min, num));
+    return String(Math.round(num * 10) / 10);
+  }
+
+  function normalise(raw) {
+    var out = blankState();
+    if (!raw || typeof raw !== 'object') return out;
+
+    var profile = raw.profile && typeof raw.profile === 'object' ? raw.profile : {};
+    var types = knownTypes();
+    var type = cleanText(profile.petType, 40);
+    if (types && types.indexOf(type) === -1) type = '';
+    out.profile.name = cleanText(profile.name, 40);
+    out.profile.petType = type;
+    out.profile.breed = cleanText(profile.breed, 60);
+    out.profile.ageStage = cleanText(profile.ageStage, 40);
+    out.profile.diet = cleanText(profile.diet, 120);
+    out.profile.calorieTarget = numberOrBlank(profile.calorieTarget, 0, 5000);
+
+    var entries = raw.entries && typeof raw.entries === 'object' ? raw.entries : {};
+    Object.keys(entries).forEach(function (iso) {
+      if (!isIsoDate(iso)) return;
+      var source = entries[iso] && typeof entries[iso] === 'object' ? entries[iso] : {};
+      var entry = blankEntry();
+      // Checklists are species specific, so the set of boolean keys changes with
+      // the pet type. Carry across whatever was stored rather than a fixed list,
+      // otherwise switching species would silently drop ticked items.
+      Object.keys(source).forEach(function (key) {
+        if (typeof source[key] === 'boolean') entry[key] = source[key];
+      });
+      entry.calories = numberOrBlank(source.calories, 0, 5000);
+      entry.minutes = numberOrBlank(source.minutes, 0, 600);
+      entry.weight = numberOrBlank(source.weight, 0, 2000);
+      entry.weightUnit = source.weightUnit === 'lb' ? 'lb' : 'kg';
+      entry.notes = typeof source.notes === 'string' ? source.notes.slice(0, 500) : '';
+      out.entries[iso] = entry;
+    });
+
+    return out;
   }
 
   function load() {
     try {
       var raw = window.localStorage.getItem(STORAGE_KEY);
-      return normalise(raw ? JSON.parse(raw) : null);
-    } catch (error) {
-      // Private browsing or a blocked storage partition. The tracker still
-      // works for this visit, it just cannot remember.
-      storageWorks = false;
+      if (!raw) return blankState();
+      return normalise(JSON.parse(raw));
+    } catch (err) {
       return blankState();
     }
   }
 
   function save(state) {
-    if (!storageWorks) return false;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       return true;
-    } catch (error) {
-      storageWorks = false;
+    } catch (err) {
       return false;
     }
   }
@@ -117,12 +116,35 @@
   function erase() {
     try {
       window.localStorage.removeItem(STORAGE_KEY);
-    } catch (error) {
-      /* nothing to do */
+      return true;
+    } catch (err) {
+      return false;
     }
   }
 
-  /* --------------------------------------------------------------- dates */
+  // The pet the user searched for on the care guide. The tracker refuses to
+  // show a routine until this exists, so nothing is built for the wrong animal.
+  function readPetProfile() {
+    try {
+      var raw = window.localStorage.getItem(PET_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      var type = cleanText(parsed.petType, 40);
+      if (!type) return null;
+      var types = knownTypes();
+      if (types && types.indexOf(type) === -1) return null;
+      return {
+        petType: type,
+        breed: cleanText(parsed.breed, 60),
+        ageStage: cleanText(parsed.ageStage, 40)
+      };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /* ------------------------------------------------------------ date maths */
 
   function isIsoDate(value) {
     return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -133,12 +155,14 @@
   }
 
   function toIso(date) {
-    var month = String(date.getMonth() + 1).padStart(2, '0');
-    var day = String(date.getDate()).padStart(2, '0');
-    return date.getFullYear() + '-' + month + '-' + day;
+    if (!(date instanceof Date) || isNaN(date.getTime())) return '';
+    var m = String(date.getMonth() + 1);
+    var d = String(date.getDate());
+    return date.getFullYear() + '-' + (m.length < 2 ? '0' + m : m) + '-' + (d.length < 2 ? '0' + d : d);
   }
 
   function shiftIso(iso, days) {
+    if (!isIsoDate(iso)) return '';
     var parts = iso.split('-');
     var date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
     date.setDate(date.getDate() + days);
@@ -146,9 +170,6 @@
   }
 
   function labelFor(iso) {
-    var today = todayIso();
-    if (iso === today) return 'Today';
-    if (iso === shiftIso(today, -1)) return 'Yesterday';
     var parts = iso.split('-');
     var date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
     return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
@@ -157,7 +178,7 @@
   function weekdayFor(iso) {
     var parts = iso.split('-');
     var date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    return date.toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 3);
+    return date.toLocaleDateString(undefined, { weekday: 'short' });
   }
 
   function relativeDay(iso) {
@@ -165,198 +186,93 @@
     if (iso === today) return 'Today';
     if (iso === shiftIso(today, -1)) return 'Yesterday';
     if (iso === shiftIso(today, 1)) return 'Tomorrow';
-    return labelFor(iso);
+    return '';
   }
 
-  /* -------------------------------------------------------------- render */
+  /* ---------------------------------------------------------- species data */
 
-  var state = load();
-  var activeDate = todayIso();
+  // Falls back to the dog routine if a species ever gains breeds before its own
+  // routine is written, so the checklist is never empty.
+  function routineFor(petType) {
+    if (window.PetData && typeof window.PetData.routine === 'function') {
+      try {
+        var list = window.PetData.routine(petType);
+        if (list && list.length) return list;
+      } catch (err) {
+        /* fall through */
+      }
+    }
+    return [
+      { key: 'fed', label: 'Fed their meal', icon: '🍚', role: 'food' },
+      { key: 'water', label: 'Fresh water available', icon: '💧', role: 'water' },
+      { key: 'activity', label: 'Exercise', icon: '🐾', role: 'activity' },
+      { key: 'hygiene', label: 'Washed or groomed', icon: '🛁', role: 'hygiene' },
+      { key: 'health', label: 'Medication or supplement', icon: '💊', role: 'health' }
+    ];
+  }
+
+  function roleKey(petType, role) {
+    var items = routineFor(petType);
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].role === role) return items[i].key;
+    }
+    return '';
+  }
+
+  function dietNoteFor(petType, ageStage) {
+    if (window.PetData && typeof window.PetData.dietNote === 'function') {
+      try {
+        return window.PetData.dietNote(petType, ageStage);
+      } catch (err) {
+        /* fall through */
+      }
+    }
+    return 'Feed a complete food for their species, measured rather than eyeballed.';
+  }
+
+  /* --------------------------------------------------------------- derived */
 
   function entryFor(iso) {
-    return state.entries[iso] || blankEntry();
+    return state.entries[iso] || null;
   }
 
-  function fillProfile() {
-    el.petName.value = state.profile.name;
-    el.petDiet.value = state.profile.diet;
-    el.petCalorieTarget.value = state.profile.calorieTarget;
-    if (state.profile.type) el.petType.value = state.profile.type;
-
-    var bits = [];
-    if (state.profile.name) bits.push(state.profile.name);
-    if (state.profile.type) bits.push(state.profile.type);
-    if (state.profile.diet) bits.push(state.profile.diet);
-    el.profileSummary.textContent = bits.length ? bits.join(' · ') : 'Add your pet’s details above.';
-  }
-
-  function fillDay(iso) {
-    activeDate = isIsoDate(iso) ? iso : todayIso();
-    el.entryDate.value = activeDate;
-    el.entryRel.textContent = relativeDay(activeDate);
-
-    var entry = entryFor(activeDate);
-    CHECK_KEYS.forEach(function (key) {
-      if (boxes[key]) boxes[key].checked = entry[key];
-    });
-    el.calories.value = entry.calories;
-    el.minutes.value = entry.minutes;
-    el.weight.value = entry.weight;
-    el.weightUnit.value = entry.weightUnit;
-    el.notes.value = entry.notes;
-    el.clearDay.disabled = !state.entries[activeDate];
-  }
-
-  function collectDay() {
-    var entry = blankEntry();
-    CHECK_KEYS.forEach(function (key) {
-      if (boxes[key]) entry[key] = boxes[key].checked;
-    });
-    entry.calories = numberOrBlank(el.calories.value, 0, 5000);
-    entry.minutes = numberOrBlank(el.minutes.value, 0, 600);
-    entry.weight = numberOrBlank(el.weight.value, 0, 2000);
-    entry.weightUnit = el.weightUnit.value === 'lb' ? 'lb' : 'kg';
-    entry.notes = el.notes.value.slice(0, 500);
-
-    var touched = CHECK_KEYS.some(function (key) { return entry[key]; }) ||
-      entry.calories !== '' || entry.minutes !== '' || entry.weight !== '' || entry.notes !== '';
-
-    if (!touched) delete state.entries[activeDate];
-    else state.entries[activeDate] = entry;
-    return touched;
+  function entryTouched(entry, petType) {
+    if (!entry) return false;
+    var items = routineFor(petType);
+    for (var i = 0; i < items.length; i++) {
+      if (entry[items[i].key] === true) return true;
+    }
+    return entry.calories !== '' || entry.minutes !== '' || entry.weight !== '' || !!entry.notes;
   }
 
   function calorieAverage() {
-    var values = [];
-    for (var i = WEEK_DAYS - 1; i >= 0; i--) {
-      var entry = state.entries[shiftIso(todayIso(), -i)];
-      if (entry && entry.calories !== '') values.push(Number(entry.calories));
+    var total = 0;
+    var count = 0;
+    var today = todayIso();
+    for (var i = 0; i < 7; i++) {
+      var entry = state.entries[shiftIso(today, -i)];
+      if (entry && entry.calories !== '') {
+        total += Number(entry.calories);
+        count++;
+      }
     }
-    if (!values.length) return null;
-    return Math.round(values.reduce(function (a, b) { return a + b; }, 0) / values.length);
+    return count ? Math.round(total / count) : 0;
   }
 
-  function fedStreak() {
-    // Count back from today. Today not yet ticked does not break the streak,
-    // otherwise every morning would read as zero.
+  // Counts back from today. A gap yesterday stops the streak rather than
+  // skipping it, so the number reflects days actually fed in a row.
+  function fedStreak(petType) {
+    var foodKey = roleKey(petType, 'food');
+    if (!foodKey) return 0;
     var streak = 0;
-    var start = state.entries[todayIso()] && state.entries[todayIso()].fed ? 0 : 1;
+    var today = todayIso();
+    var start = state.entries[today] && state.entries[today][foodKey] === true ? 0 : 1;
     for (var i = start; i < 400; i++) {
-      var entry = state.entries[shiftIso(todayIso(), -i)];
-      if (entry && entry.fed) streak++;
+      var entry = state.entries[shiftIso(today, -i)];
+      if (entry && entry[foodKey] === true) streak++;
       else break;
     }
     return streak;
-  }
-
-  // The app hides things with a .hidden class (display:none !important). A
-  // class rule like display:grid beats the native [hidden] attribute, so use
-  // the same mechanism as the rest of the site.
-  function setShown(node, visible) {
-    if (visible) node.classList.remove('hidden');
-    else node.classList.add('hidden');
-  }
-
-  function renderWeek() {
-    var today = todayIso();
-    var hasAny = Object.keys(state.entries).length > 0;
-    setShown(el.weekEmpty, !hasAny);
-    setShown(el.weekStats, hasAny);
-
-    var fed = 0;
-    var exercised = 0;
-    var html = '';
-
-    for (var i = WEEK_DAYS - 1; i >= 0; i--) {
-      var iso = shiftIso(today, -i);
-      var entry = state.entries[iso];
-      var isToday = iso === today;
-
-      if (entry) {
-        if (entry.fed) fed++;
-        if (entry.exercise) exercised++;
-      }
-
-      var day = isToday ? ' is-today' : '';
-      var entry2 = entry || blankEntry();
-
-      html += '<button type="button" class="week-day' + day + '" role="listitem" data-date="' + iso + '"' +
-        ' aria-label="' + escapeHtml(labelFor(iso) + ', ' + (entry2.fed ? 'fed' : 'not fed') +
-          (entry2.exercise ? ', exercised' : '')) + '">' +
-        '<span class="week-day-name">' + escapeHtml(isToday ? 'Now' : weekdayFor(iso)) + '</span>' +
-        '<span class="week-day-dots">';
-
-      ['fed', 'water', 'exercise', 'wash'].forEach(function (key) {
-        html += '<span class="week-dot week-dot-' + key + (entry2[key] ? ' is-on' : '') + '" aria-hidden="true"></span>';
-      });
-
-      html += '</span>' +
-        '<span class="week-day-kcal">' + (entry2.calories !== '' ? escapeHtml(entry2.calories) : '&middot;') + '</span>' +
-        '</button>';
-    }
-
-    el.weekStrip.innerHTML = html;
-    el.statFed.textContent = String(fed);
-    el.statExercise.textContent = String(exercised);
-
-    var average = calorieAverage();
-    el.statCalories.textContent = average === null ? '0' : String(average);
-    el.statStreak.textContent = String(fedStreak());
-
-    // Only nag about calories when the user gave us a target to compare with.
-    var target = Number(state.profile.calorieTarget);
-    if (average !== null && state.profile.calorieTarget !== '' && target > 0) {
-      var diff = average - target;
-      var percent = Math.round(Math.abs(diff) / target * 100);
-      if (diff > 0) {
-        setShown(el.warning, true);
-        el.warning.textContent = 'Average of ' + average + ' kcal is about ' + percent +
-          '% above the ' + target + ' kcal target. Treat this as a prompt to check with your vet, not a diagnosis.';
-      } else {
-        setShown(el.warning, true);
-        el.warning.textContent = 'Average of ' + average + ' kcal is about ' + percent +
-          '% below the ' + target + ' kcal target. A vet can confirm whether that suits your pet.';
-      }
-    } else {
-      setShown(el.warning, false);
-      el.warning.textContent = '';
-    }
-  }
-
-  function announceSaved() {
-    var ok = save(state);
-    if (ok) {
-      el.saveStatus.textContent = 'Saved';
-      window.clearTimeout(announceSaved.timer);
-      announceSaved.timer = window.setTimeout(function () { el.saveStatus.textContent = ''; }, 1600);
-    } else {
-      el.saveStatus.textContent = 'Could not save — this browser is blocking local storage.';
-    }
-  }
-
-  function persist() {
-    state.profile.name = el.petName.value.trim().slice(0, 40);
-    state.profile.type = el.petType.value;
-    state.profile.diet = el.petDiet.value.trim().slice(0, 80);
-    state.profile.calorieTarget = numberOrBlank(el.petCalorieTarget.value, 0, 5000);
-
-    collectDay();
-    var ok = save(state);
-    renderWeek();
-    fillProfile();
-    el.clearDay.disabled = !state.entries[activeDate];
-
-    if (!ok) {
-      el.storageNote.textContent = 'This browser is blocking local storage, so entries will disappear when you leave.';
-      return;
-    }
-    el.saveStatus.textContent = 'Saved';
-    window.clearTimeout(persist.timer);
-    persist.timer = window.setTimeout(function () { el.saveStatus.textContent = ''; }, 1600);
-  }
-
-  function escapeHtml(value) {
-    return window.PetGuide.escapeHtml(value);
   }
 
   // Exposed for scripts/check.js so the storage and date maths can be tested
@@ -364,85 +280,383 @@
   // layer can be exercised on its own.
   window.PetTracker = {
     blankEntry: blankEntry,
+    blankState: blankState,
     normalise: normalise,
     numberOrBlank: numberOrBlank,
+    cleanText: cleanText,
+    readPetProfile: readPetProfile,
+    escapeHtml: escapeHtml,
     toIso: toIso,
     shiftIso: shiftIso,
+    isIsoDate: isIsoDate,
     fedStreak: fedStreak
   };
 
   /* --------------------------------------------------------------- wiring */
 
-  function populateTypes() {
-    var types = window.PetData ? PetData.types() : [];
-    types.forEach(function (type) {
-      var option = document.createElement('option');
-      option.value = type;
-      option.textContent = type;
-      el.petType.appendChild(option);
+  var el = null;
+  var state = blankState();
+  var activeDate = todayIso();
+
+  function setShown(node, visible) {
+    if (!node) return;
+    // The project hides with a .hidden class rather than the hidden attribute,
+    // because .info-card and .week-stats are display:grid and would win.
+    node.classList.toggle('hidden', !visible);
+  }
+
+  function buildChecklist() {
+    var items = routineFor(state.profile.petType);
+    var entry = entryFor(activeDate) || blankEntry();
+
+    el.checklist.innerHTML = '';
+    var legend = document.createElement('legend');
+    legend.className = 'tracker-legend';
+    legend.textContent = 'Done today';
+    el.checklist.appendChild(legend);
+
+    items.forEach(function (item) {
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.id = 'chk-' + item.key;
+      input.setAttribute('data-key', item.key);
+      input.checked = entry[item.key] === true;
+
+      var chip = document.createElement('label');
+      chip.className = 'check-chip';
+      chip.setAttribute('for', input.id);
+
+      var body = document.createElement('span');
+      body.className = 'check-chip-body';
+
+      var icon = document.createElement('span');
+      icon.className = 'check-chip-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = item.icon || '';
+
+      var text = document.createElement('span');
+      text.className = 'check-chip-text';
+      text.textContent = item.label;
+
+      body.appendChild(icon);
+      body.appendChild(text);
+      chip.appendChild(input);
+      chip.appendChild(body);
+      el.checklist.appendChild(chip);
     });
-    if (!el.petType.options.length) {
-      var fallback = document.createElement('option');
-      fallback.value = '';
-      fallback.textContent = 'Select a type';
-      el.petType.insertBefore(fallback, el.petType.firstChild);
+  }
+
+  function applySpecies() {
+    var type = state.profile.petType;
+    var hasActivity = roleKey(type, 'activity') !== '';
+
+    el.dietNote.textContent = dietNoteFor(type, state.profile.ageStage);
+    setShown(el.minutesField, hasActivity);
+    setShown(el.statExerciseBox, hasActivity);
+    buildChecklist();
+  }
+
+  function fillProfile() {
+    el.name.value = state.profile.name;
+    el.type.value = state.profile.petType;
+    el.diet.value = state.profile.diet;
+    el.target.value = state.profile.calorieTarget;
+    fillProfileSummary();
+  }
+
+  function fillDay(iso) {
+    var entry = entryFor(iso) || blankEntry();
+    var boxes = el.checklist.querySelectorAll('input[type="checkbox"]');
+    for (var i = 0; i < boxes.length; i++) {
+      boxes[i].checked = entry[boxes[i].getAttribute('data-key')] === true;
+    }
+    el.calories.value = entry.calories;
+    el.minutes.value = entry.minutes;
+    el.weight.value = entry.weight;
+    el.weightUnit.value = entry.weightUnit;
+    el.notes.value = entry.notes;
+
+    var relative = relativeDay(iso);
+    el.dayHint.textContent = relative || labelFor(iso);
+    el.clearDay.disabled = !entryFor(iso);
+  }
+
+  function collectDay() {
+    var entry = blankEntry();
+    var boxes = el.checklist.querySelectorAll('input[type="checkbox"]');
+    for (var i = 0; i < boxes.length; i++) {
+      entry[boxes[i].getAttribute('data-key')] = boxes[i].checked;
+    }
+    entry.calories = el.calories.value;
+    entry.minutes = el.minutes.value;
+    entry.weight = el.weight.value;
+    entry.weightUnit = el.weightUnit.value;
+    entry.notes = el.notes.value;
+    return entry;
+  }
+
+  function saveStatus() {
+    var ok = save(state);
+    if (!ok) {
+      el.storageNote.textContent =
+        'This browser would not let the tracker save. It is full or blocking storage, so your entries will be lost when you leave.';
+      return;
+    }
+    el.saveStatus.textContent = 'Saved';
+    if (saveStatus.timer) window.clearTimeout(saveStatus.timer);
+    saveStatus.timer = window.setTimeout(function () {
+      el.saveStatus.textContent = '';
+    }, 1600);
+  }
+
+  function renderWeek() {
+    var today = todayIso();
+    var petType = state.profile.petType;
+    var items = routineFor(petType);
+    var dots = items.slice(0, 4).map(function (item) {
+      return { key: item.key, icon: item.icon };
+    });
+
+    var hasAny = false;
+    var fedDays = 0;
+    var activeDays = 0;
+    var foodKey = roleKey(petType, 'food');
+    var activityKey = roleKey(petType, 'activity');
+
+    var cells = '';
+    for (var i = 6; i >= 0; i--) {
+      var iso = shiftIso(today, -i);
+      var entry = state.entries[iso];
+      if (entryTouched(entry, petType)) hasAny = true;
+      if (foodKey && entry && entry[foodKey] === true) fedDays++;
+      if (activityKey && entry && entry[activityKey] === true) activeDays++;
+
+      var marks = '';
+      for (var d = 0; d < dots.length; d++) {
+        if (entry && entry[dots[d].key] === true) {
+          marks += '<span class="week-dot-on" aria-hidden="true">' + escapeHtml(dots[d].icon) + '</span>';
+        } else {
+          marks += '<span class="week-dot" aria-hidden="true"></span>';
+        }
+      }
+
+      var className = 'week-cell';
+      if (iso === today) className += ' week-cell-today';
+      if (iso === activeDate) className += ' week-cell-active';
+      var caption = labelFor(iso) + (entryTouched(entry, petType) ? ', logged' : ', nothing logged');
+
+      cells +=
+        '<button type="button" class="' + className + '" role="listitem" data-iso="' + iso + '"' +
+        ' aria-current="' + (iso === activeDate ? 'date' : 'false') + '"' +
+        ' aria-label="' + escapeHtml(caption) + '">' +
+        '<span class="week-day">' + escapeHtml(weekdayFor(iso)) + '</span>' +
+        '<span class="week-date">' + escapeHtml(iso.slice(8)) + '</span>' +
+        '<span class="week-dots">' + marks + '</span>' +
+        '</button>';
+    }
+    el.weekStrip.innerHTML = cells;
+
+    setShown(el.weekEmpty, !hasAny);
+    setShown(el.weekStats, hasAny);
+    if (hasAny) {
+      el.statFed.textContent = String(fedDays);
+      el.statExercise.textContent = String(activeDays);
+      el.statCalories.textContent = String(calorieAverage());
+      el.statStreak.textContent = String(fedStreak(petType));
+    }
+
+    var target = Number(state.profile.calorieTarget);
+    var average = calorieAverage();
+    if (target > 0 && average > 0) {
+      var drift = (average - target) / target;
+      if (Math.abs(drift) >= 0.15) {
+        setShown(el.warning, true);
+        el.warning.textContent = drift > 0
+          ? 'Your recent average is ' + average + ' kcal, above your ' + target + ' kcal target by ' +
+            Math.round(drift * 100) + '%. Worth a word with your vet.'
+          : 'Your recent average is ' + average + ' kcal, below your ' + target + ' kcal target by ' +
+            Math.round(Math.abs(drift) * 100) + '%. Worth a word with your vet.';
+      } else {
+        setShown(el.warning, false);
+      }
+    } else {
+      setShown(el.warning, false);
     }
   }
 
-  function init() {
-    if (!storageWorks) {
-      el.storageNote.textContent = 'This browser is blocking local storage, so entries will disappear when you leave.';
-    }
-
-    populateTypes();
+  function render() {
     fillProfile();
-    fillDay(todayIso());
+    fillDay(activeDate);
     renderWeek();
+  }
 
-    [el.petName, el.petType, el.petDiet, el.petCalorieTarget].forEach(function (input) {
-      input.addEventListener('input', persist);
-      input.addEventListener('change', persist);
+  function persist() {
+    state.entries[activeDate] = collectDay();
+    if (!entryTouched(state.entries[activeDate], state.profile.petType)) {
+      delete state.entries[activeDate];
+    }
+    saveStatus();
+    renderWeek();
+  }
+
+  function populateTypes() {
+    var list = window.PetData && typeof window.PetData.types === 'function' ? window.PetData.types() : [];
+    el.type.innerHTML = '';
+    list.forEach(function (name) {
+      var option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      el.type.appendChild(option);
+    });
+  }
+
+  function clearDay() {
+    delete state.entries[activeDate];
+    save(state);
+    fillDay(activeDate);
+    renderWeek();
+    el.saveStatus.textContent = 'Day cleared';
+  }
+
+  function clearAll() {
+    if (!window.confirm('Delete every day you have logged, and your pet details? This cannot be undone.')) return;
+    erase();
+    state = blankState();
+    state.profile.petType = el.type.value;
+    fillProfile();
+    fillDay(activeDate);
+    renderWeek();
+    el.saveStatus.textContent = 'All tracker data deleted';
+  }
+
+  function openDay(iso) {
+    activeDate = iso;
+    el.date.value = iso;
+    fillDay(iso);
+    renderWeek();
+  }
+
+  function bind() {
+    el.date.addEventListener('change', function () {
+      openDay(isIsoDate(el.date.value) ? el.date.value : todayIso());
     });
 
-    CHECK_KEYS.forEach(function (key) {
-      if (boxes[key]) boxes[key].addEventListener('change', persist);
-    });
+    el.checklist.addEventListener('change', persist);
+    el.calories.addEventListener('input', persist);
+    el.minutes.addEventListener('input', persist);
+    el.weight.addEventListener('input', persist);
+    el.weightUnit.addEventListener('change', persist);
+    el.notes.addEventListener('input', persist);
 
-    [el.calories, el.minutes, el.weight, el.weightUnit, el.notes].forEach(function (input) {
-      input.addEventListener('input', persist);
-      input.addEventListener('change', persist);
+    el.name.addEventListener('input', function () {
+      state.profile.name = cleanText(el.name.value, 40);
+      fillProfileSummary();
+      save(state);
     });
-
-    el.entryDate.addEventListener('change', function () {
-      fillDay(el.entryDate.value);
+    el.diet.addEventListener('input', function () {
+      state.profile.diet = cleanText(el.diet.value, 120);
+      save(state);
+    });
+    el.target.addEventListener('input', function () {
+      state.profile.calorieTarget = numberOrBlank(el.target.value, 0, 5000);
+      save(state);
       renderWeek();
     });
+
+    // Changing species rebuilds the checklist and the diet note. Keys shared
+    // between the two routines keep their ticked state via the stored entry.
+    el.type.addEventListener('change', function () {
+      state.profile.petType = el.type.value;
+      applySpecies();
+      render();
+      save(state);
+    });
+
+    el.clearDay.addEventListener('click', clearDay);
+    el.clearAll.addEventListener('click', clearAll);
 
     el.weekStrip.addEventListener('click', function (event) {
-      var button = event.target.closest('.week-day');
+      var button = event.target.closest ? event.target.closest('.week-cell') : null;
       if (!button) return;
-      fillDay(button.getAttribute('data-date'));
-      el.entryDate.focus();
+      var iso = button.getAttribute('data-iso');
+      if (isIsoDate(iso)) openDay(iso);
     });
+  }
 
-    el.clearDay.addEventListener('click', function () {
-      delete state.entries[activeDate];
-      save(state);
-      fillDay(activeDate);
-      renderWeek();
-      el.saveStatus.textContent = 'Day cleared';
-    });
+  function fillProfileSummary() {
+    var bits = [];
+    if (state.profile.name) bits.push(state.profile.name);
+    if (state.profile.breed) bits.push(state.profile.breed);
+    if (state.profile.ageStage) bits.push(state.profile.ageStage);
+    el.profileSummary.textContent = bits.length ? bits.join(' \u00b7 ') : 'Add your pet\u2019s details above.';
+  }
 
-    el.clearAll.addEventListener('click', function () {
-      var first = window.confirm('Delete all tracker data, including every past day? This cannot be undone.');
-      if (!first) return;
-      state = blankState();
-      erase();
-      fillProfile();
-      fillDay(activeDate);
-      renderWeek();
-      el.saveStatus.textContent = 'All tracker data deleted';
-    });
+  function init() {
+    el = {
+      gate: document.getElementById('tracker-gate'),
+      body: document.getElementById('tracker-body'),
+      tagline: document.getElementById('hero-tagline'),
+      name: document.getElementById('pet-name'),
+      type: document.getElementById('pet-type'),
+      diet: document.getElementById('pet-diet'),
+      target: document.getElementById('pet-calorie-target'),
+      profileSummary: document.getElementById('profile-summary'),
+      dietNote: document.getElementById('diet-note'),
+      checklist: document.getElementById('checklist'),
+      date: document.getElementById('entry-date'),
+      dayHint: document.getElementById('entry-rel'),
+      calories: document.getElementById('entry-calories'),
+      minutes: document.getElementById('entry-minutes'),
+      minutesField: document.getElementById('minutes-field'),
+      weight: document.getElementById('entry-weight'),
+      weightUnit: document.getElementById('entry-weight-unit'),
+      notes: document.getElementById('entry-notes'),
+      clearDay: document.getElementById('clear-day-btn'),
+      clearAll: document.getElementById('clear-all-btn'),
+      weekStrip: document.getElementById('week-strip'),
+      weekEmpty: document.getElementById('week-empty'),
+      weekStats: document.getElementById('week-stats'),
+      statFed: document.getElementById('stat-fed'),
+      statExercise: document.getElementById('stat-exercise'),
+      statExerciseBox: document.getElementById('stat-exercise-box'),
+      statCalories: document.getElementById('stat-calories'),
+      statStreak: document.getElementById('stat-streak'),
+      warning: document.getElementById('tracker-warning'),
+      saveStatus: document.getElementById('save-status'),
+      storageNote: document.getElementById('storage-note')
+    };
+
+    populateTypes();
+    state = load();
+
+    // No pet from the care guide yet, so there is nothing sensible to build a
+    // routine from. Ask for the details instead of showing a generic checklist.
+    var pet = readPetProfile();
+    if (!pet) {
+      setShown(el.gate, true);
+      setShown(el.body, false);
+      return;
+    }
+
+    if (!state.profile.petType) state.profile.petType = pet.petType;
+    if (!state.profile.breed && pet.breed) state.profile.breed = pet.breed;
+    if (!state.profile.ageStage && pet.ageStage) state.profile.ageStage = pet.ageStage;
+    if (!state.profile.name && pet.breed) state.profile.name = pet.breed;
+
+    activeDate = todayIso();
+    el.date.value = activeDate;
+
+    setShown(el.gate, false);
+    setShown(el.body, true);
+
+    applySpecies();
+    render();
+    bind();
+
+    var noun = state.profile.name || state.profile.breed || state.profile.petType;
+    if (el.tagline && noun) {
+      el.tagline.textContent = 'Routine and diet for your ' + noun.toLowerCase();
+    }
   }
 
   if (document.readyState === 'loading') {

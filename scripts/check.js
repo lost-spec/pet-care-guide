@@ -509,6 +509,7 @@ errorKeys.forEach((key) => {
 section('Daily tracker');
 const trackerHtml = read('public/tracker.html');
 const trackerJs = read('public/tracker.js');
+const petDataJs = read('public/pet-data.js');
 
 // Every id the script looks up must exist in the page.
 const trackerRefs = [...trackerJs.matchAll(/getElementById\('([^']+)'\)/g)].map((m) => m[1]);
@@ -518,20 +519,59 @@ trackerRefs.forEach((id) => {
   ok('tracker script finds #' + id, trackerIds.has(id), 'missing id: ' + id);
 });
 
-// The checklist must be real checkboxes, not divs with click handlers.
-['fed', 'water', 'exercise', 'wash', 'meds', 'potty'].forEach((key) => {
-  ok('tracker tracks "' + key + '"', new RegExp('data-key="' + key + '"').test(trackerHtml));
-});
-ok('checklist is a fieldset with a legend',
-  /<fieldset class="tracker-checklist">/.test(trackerHtml) && /<legend class="tracker-legend">/.test(trackerHtml));
-ok('checklist uses native checkboxes', (trackerHtml.match(/type="checkbox"/g) || []).length >= 6);
-ok('each checkbox has a label', (trackerHtml.match(/class="check-chip" for="chk-/g) || []).length >= 6);
+// The tracker must not show a routine until the care guide has been told the pet.
+ok('tracker has a gate section', /id="tracker-gate"/.test(trackerHtml));
+ok('the gate asks for the pet details first', /Tell us about your pet first/.test(trackerHtml));
+ok('the gate sends them to the care guide', /href="\/"[^>]*>Go to the care guide/.test(trackerHtml));
+ok('the gate starts hidden', /tracker-gate hidden"/.test(trackerHtml));
+ok('the tracker body starts hidden', /class="hidden" id="tracker-body"/.test(trackerHtml));
+ok('tracker reads the pet saved by the care guide', /petCareGuide\.pet\.v1/.test(trackerJs));
+ok('the care guide saves the pet it searched for',
+  /petCareGuide\.pet\.v1/.test(script) && /rememberPet\(request\)/.test(script));
+// Recorded before the fetch, so an unconfigured or failing API still unlocks it.
+ok('the pet is recorded before the API call',
+  script.indexOf('rememberPet(request);') < script.indexOf("fetch('/api/pet-info'"),
+  'rememberPet must run before the request');
+ok('tracker returns early when there is no pet', /if \(!pet\) \{/.test(trackerJs));
+ok('tracker hides the body until a pet is known',
+  /setShown\(el\.gate, true\);\s*setShown\(el\.body, false\);/.test(trackerJs));
 
-// The seven habits the user asked to track must all be user-visible.
-['Fed', 'Fresh water', 'Exercise or walk', 'Washed or groomed', 'Medication or supplement', 'Potty normal']
-  .forEach((label) => {
-    ok('tracker shows "' + label + '"', trackerHtml.includes('>' + label + '<'));
-  });
+// Hiding must use the .hidden class: .info-card and .week-stats are display:grid
+// and would win against the native hidden attribute.
+ok('tracker uses no native hidden attributes', !/\shidden(\s|>)/.test(trackerHtml),
+  'a bare hidden attribute is ignored by display:grid rules');
+ok('visibility is toggled with the hidden class', /classList\.toggle\('hidden'/.test(trackerJs));
+
+// The checklist is built per species, so it must not be hard-coded in the HTML.
+ok('checklist is a fieldset', /<fieldset class="tracker-checklist" id="checklist">/.test(trackerHtml));
+ok('the fieldset ships only its legend',
+  !/type="checkbox"/.test(trackerHtml), 'checkboxes must be generated from the routine');
+ok('checkboxes are created as real inputs',
+  /input\.type = 'checkbox'/.test(trackerJs));
+ok('each generated checkbox is labelled',
+  /chip\.setAttribute\('for', input\.id\)/.test(trackerJs) && /chip\.className = 'check-chip'/.test(trackerJs));
+ok('the checklist is rebuilt from the species routine',
+  /function routineFor/.test(petDataJs) && /window\.PetData\.routine\(petType\)/.test(trackerJs));
+ok('a species without exercise hides the minutes field',
+  /setShown\(el\.minutesField, hasActivity\)/.test(trackerJs));
+ok('a species without exercise hides the exercised stat',
+  /setShown\(el\.statExerciseBox, hasActivity\)/.test(trackerJs));
+ok('there is a noscript note for the generated checklist', /<noscript>/.test(trackerHtml));
+
+// Diet guidance is shown and comes from the species and age stage.
+ok('tracker shows a diet note', /id="diet-note"/.test(trackerHtml));
+ok('the diet note uses the species and age stage', /dietNoteFor\(type, state\.profile\.ageStage\)/.test(trackerJs));
+ok('diet advice is caveated to a vet', /vet/i.test(trackerHtml));
+
+// Labels must not sit on top of values they cannot float away from.
+ok('the date field uses a static label', /class="field field-static"/.test(trackerHtml));
+ok('static labels are taken out of the floating pattern',
+  /\.field-static label \{[^}]*position: static/.test(css));
+ok('the notes field does not inherit the floating label',
+  !/class="field tracker-notes"/.test(trackerHtml));
+ok('no placeholder is set on the date input', !/id="entry-date"[^>]*placeholder/.test(trackerHtml));
+
+// Fields the user needs.
 ok('tracker captures diet', /id="pet-diet"/.test(trackerHtml));
 ok('tracker captures calories given', /id="entry-calories"/.test(trackerHtml));
 ok('tracker captures a daily calorie target', /id="pet-calorie-target"/.test(trackerHtml));
@@ -542,7 +582,8 @@ ok('tracker lets you pick a past date', /id="entry-date"[^>]*type="date"|type="d
 ok('tracker uses localStorage', /localStorage/.test(trackerJs));
 ok('tracker says data stays in the browser', /browser only|blocking local storage/.test(trackerHtml + trackerJs));
 ok('tracker has a delete-all control', /id="clear-all-btn"/.test(trackerHtml));
-ok('tracker survives blocked storage', /storageWorks/.test(trackerJs));
+ok('tracker survives blocked storage',
+  /try \{[\s\S]{0,200}localStorage\.setItem[\s\S]{0,120}\} catch/.test(trackerJs));
 ok('tracker is excluded from search indexing', /name="robots" content="noindex/.test(trackerHtml));
 
 // Reachable from every page.
@@ -556,33 +597,112 @@ ok('breed pages link to the tracker', /href="\/tracker\.html"/.test(firstBreedPa
 ok('home page shows a tracker button', /class="btn btn-secondary btn-large" href="\/tracker\.html"/.test(html));
 ok('tracker is not in the sitemap', !/tracker\.html/.test(sitemap));
 ok('tracker styles exist', /\.week-strip \{/.test(css) && /\.check-chip-body \{/.test(css));
+ok('gate styles exist', /\.tracker-gate-text \{/.test(css));
 
+/* ------------------------------------------------- 12. species routine data */
+section('Species routines and diet');
+
+ok('PetData exposes types()', typeof PetData.types === 'function');
+const species = PetData.types();
+ok('types() lists every species', species.length >= 9, species.join(', '));
+
+species.forEach((name) => {
+  const routine = PetData.routine(name);
+  ok('routine exists for ' + name, Array.isArray(routine) && routine.length >= 5, name);
+
+  const keys = routine.map((r) => r.key);
+  ok('routine keys are unique for ' + name, new Set(keys).size === keys.length, keys.join(','));
+
+  const roles = routine.map((r) => r.role);
+  ok('routine for ' + name + ' has a food item', roles.includes('food'), roles.join(','));
+  ok('routine for ' + name + ' has a water item', roles.includes('water'), roles.join(','));
+  ok('food key resolves for ' + name, PetData.foodKey(name) === keys[roles.indexOf('food')]);
+
+  ok('every item in ' + name + ' is labelled', routine.every((r) => typeof r.label === 'string' && r.label.length));
+  ok('every item in ' + name + ' has a safe key', routine.every((r) => /^[a-z][a-z0-9]*$/.test(r.key)));
+
+  const note = PetData.dietNote(name, 'Adult (1-5 years)');
+  ok('diet note exists for ' + name, typeof note === 'string' && note.length > 20);
+});
+
+// A fish tank has no walk; a routine must not offer one.
+ok('fish have no exercise item', PetData.activityKey('Fish') === '', PetData.activityKey('Fish'));
+ok('fish still have a food item', PetData.foodKey('Fish') === 'food');
+ok('fish have water and habitat items instead',
+  PetData.routine('Fish').some((r) => r.role === 'habitat'));
+ok('reptiles have no exercise item', PetData.activityKey('Reptile') === '');
+ok('dogs do have an exercise item', PetData.activityKey('Dog') === 'walk');
+ok('measuresActivity flags fish as false', PetData.measuresActivity('Fish') === false);
+ok('measuresActivity flags dogs as true', PetData.measuresActivity('Dog') === true);
+
+// Species-specific wording, so the diet is genuinely tailored.
+ok('rabbit diet leads with hay', /hay/i.test(PetData.dietNote('Rabbit', 'Adult (1-5 years)')));
+ok('guinea pig diet avoids muesli', /muesli/i.test(PetData.dietNote('Guinea Pig', 'Adult (1-5 years)')));
+ok('horse diet warns against withholding hay',
+  /never withhold hay/i.test(PetData.dietNote('Horse', 'Adult (1-5 years)')));
+ok('fish diet warns about overfeeding',
+  /overfeeding|fouled water/i.test(PetData.dietNote('Fish', 'Adult (1-5 years)')));
+ok('cat diet mentions wet food', /wet food/i.test(PetData.dietNote('Cat', 'Adult (1-5 years)')));
+
+// Age stage changes the guidance.
+const senior = PetData.dietNote('Dog', 'Senior (5 years and up)');
+const young = PetData.dietNote('Dog', 'Young (under 1 year)');
+ok('senior stage changes the diet note', /older pets/i.test(senior), senior);
+ok('young stage changes the diet note', /young ones/i.test(young), young);
+ok('adult stage keeps the plain note',
+  PetData.dietNote('Dog', 'Adult (1-5 years)') === PetData.dietNote('Dog', ''),
+  PetData.dietNote('Dog', 'Adult (1-5 years)'));
+
+/* --------------------------------------------- 13. tracker data-layer maths */
 // Exercise the storage and maths logic without a browser. Only the pure data
 // layer runs here: everything after the wiring banner needs a real DOM.
 const WIRING_MARKER = 'function populateTypes';
 const wiringAt = trackerJs.indexOf(WIRING_MARKER);
 ok('tracker has a testable seam before the DOM wiring', wiringAt > 0);
 if (wiringAt > 0) {
-  // The slice already sits inside the module's own IIFE, so close that one
-  // rather than wrapping it in another function.
-  const trackerSrc = trackerJs.slice(0, wiringAt) + '\n})();';
-  const trackerSandbox = { window: {}, document: undefined };
-  const trackerModule = new vm.Script(trackerSrc, { filename: 'tracker.data-layer.js' });
-  trackerModule.runInNewContext(Object.assign(trackerSandbox, {
-    window: Object.assign(trackerSandbox.window, { localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } }),
+  const store = {};
+  const ctx = {
+    window: {},
     // The data layer only builds its element map at load time; nothing
     // dereferences it before the wiring section.
     document: { getElementById: () => null, querySelector: () => null, addEventListener: () => {} },
     JSON, Math, Date, Number, String, Object, Array, isFinite, RegExp, console
-  }));
-  var Tracker = trackerSandbox.window.PetTracker;
+  };
+  ctx.window.localStorage = {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = v; },
+    removeItem: (k) => { delete store[k]; }
+  };
+  vm.createContext(ctx);
+  // pet-data.js loads before tracker.js in the page, so do the same here or the
+  // tracker's species validation has no list to check against.
+  vm.runInContext(petDataJs, ctx);
+  // The slice already sits inside the module's own IIFE, so close that one
+  // rather than wrapping it in another function.
+  vm.runInContext(trackerJs.slice(0, wiringAt) + '\n})();', ctx);
+  var Tracker = ctx.window.PetTracker;
 
   ok('tracker exposes its helpers', !!Tracker && typeof Tracker.normalise === 'function');
+
+  // The gate: no saved pet means no routine.
+  ok('no saved pet yields null', Tracker.readPetProfile() === null);
+  store['petCareGuide.pet.v1'] = JSON.stringify({ petType: 'Dog', breed: 'Poodle', ageStage: 'Adult (1-5 years)' });
+  ok('a saved pet is read back', (Tracker.readPetProfile() || {}).petType === 'Dog');
+  store['petCareGuide.pet.v1'] = JSON.stringify({ petType: 'Dragon', breed: '' });
+  ok('an unknown species is refused', Tracker.readPetProfile() === null);
+  store['petCareGuide.pet.v1'] = JSON.stringify({ breed: 'Poodle' });
+  ok('a pet with no species is refused', Tracker.readPetProfile() === null);
+  store['petCareGuide.pet.v1'] = '{not json';
+  ok('corrupt saved pet data is refused', Tracker.readPetProfile() === null);
+
+  // Escaping lives in the tested layer, because pet names reach innerHTML.
+  ok('escapeHtml neutralises markup', Tracker.escapeHtml('<img src=x onerror="a">') === '&lt;img src=x onerror=&quot;a&quot;&gt;');
+  ok('escapeHtml handles null', Tracker.escapeHtml(null) === '');
 }
 
 // A hostile or half-written stored record must not produce undefined fields.
 const nasty = Tracker.normalise({
-  profile: { name: 'x'.repeat(200), diet: null, calorieTarget: 'abc', type: 'Dog' },
+  profile: { name: 'x'.repeat(200), diet: null, calorieTarget: 'abc', petType: 'Dragon' },
   entries: {
     '2026-10-04': { fed: 'yes', calories: '99999', minutes: -5, weight: 'abc', weightUnit: 'xx', notes: 'n'.repeat(900) },
     'not-a-date': { fed: true },
@@ -592,18 +712,26 @@ const nasty = Tracker.normalise({
 ok('profile name is length-capped', nasty.profile.name.length === 40, nasty.profile.name.length + ' chars');
 ok('null diet becomes an empty string', nasty.profile.diet === '');
 ok('non-numeric calorie target is dropped', nasty.profile.calorieTarget === '');
+ok('an unknown species is rejected', nasty.profile.petType === '', nasty.profile.petType);
 ok('invalid date keys are discarded', !('not-a-date' in nasty.entries));
 const day = nasty.entries['2026-10-04'];
-ok('checkbox coercion keeps booleans', day.fed === false && day.water === false);
+ok('a string in a checkbox slot is not treated as done', day.fed === undefined, String(day.fed));
 ok('calories are clamped to the allowed range', day.calories === '5000', day.calories);
 ok('minutes are clamped to the allowed range', day.minutes === '0', day.minutes);
 ok('non-numeric weight is dropped', day.weight === '', day.weight);
 ok('unknown weight unit falls back to kg', day.weightUnit === 'kg');
 ok('notes are length-capped', day.notes.length === 500, day.notes.length + ' chars');
-ok('a null entry yields a usable day', Tracker.normalise({ entries: { '2026-10-05': null } }).entries['2026-10-05'].fed === false);
 
-ok('blank entry has every checkbox key',
-  Tracker.blankEntry && ['fed', 'water', 'exercise', 'wash', 'meds', 'potty'].every((k) => k in Tracker.blankEntry()));
+// Species checklists use different keys, so arbitrary booleans must survive.
+const switched = Tracker.normalise({
+  profile: { petType: 'Fish' },
+  entries: { '2026-10-04': { food: true, water: true, filter: false, notes: 'ammonia high' } }
+});
+ok('a fish routine key survives normalisation', switched.entries['2026-10-04'].food === true);
+ok('an unticked fish key stays false', switched.entries['2026-10-04'].filter === false);
+ok('a routine key does not become a string', switched.entries['2026-10-04'].water === true);
+ok('blank entry carries the numeric fields',
+  ['calories', 'minutes', 'weight', 'weightUnit', 'notes'].every((k) => k in Tracker.blankEntry()));
 
 // Date maths must cross month and year boundaries correctly.
 ok('date maths crosses a month boundary', Tracker.shiftIso('2026-10-01', -1) === '2026-09-30',
@@ -616,6 +744,7 @@ ok('date maths crosses a leap day', Tracker.shiftIso('2024-03-01', -1) === '2024
   Tracker.shiftIso('2024-03-01', -1));
 ok('date maths formats with padding', Tracker.toIso(new Date(2026, 0, 5)) === '2026-01-05',
   Tracker.toIso(new Date(2026, 0, 5)));
+ok('date maths rejects rubbish input', Tracker.shiftIso('nope', -1) === '');
 
 console.log('\n' + (failures ? failures + ' of ' + checks + ' checks FAILED' : 'All ' + checks + ' checks passed'));
 process.exit(failures ? 1 : 0);

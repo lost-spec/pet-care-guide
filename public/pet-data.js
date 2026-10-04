@@ -138,15 +138,165 @@
     return (HAZARDS[petType] || []).slice();
   }
 
+  /* ------------------------------------------------------------- routines */
+
+  // A routine is the daily checklist for one species. `role` lets the tracker
+  // ask generic questions ("how many days fed?") without hard-coding a key per
+  // species: the first `food` item counts as fed, the first `activity` item as
+  // exercised. Everything else is just tracked and stored.
+  var ROUTINES = {
+    Dog: [
+      { key: 'fed', label: 'Fed their meal', icon: '🍚', role: 'food' },
+      { key: 'water', label: 'Fresh water available', icon: '💧', role: 'water' },
+      { key: 'walk', label: 'Walk or exercise', icon: '🐕', role: 'activity' },
+      { key: 'potty', label: 'Potty normal', icon: '🌿', role: 'potty' },
+      { key: 'brush', label: 'Brushed / coat checked', icon: '🪮', role: 'hygiene' },
+      { key: 'meds', label: 'Medication given', icon: '💊', role: 'health' }
+    ],
+    Cat: [
+      { key: 'fed', label: 'Fed their meal', icon: '🍚', role: 'food' },
+      { key: 'water', label: 'Fresh water available', icon: '💧', role: 'water' },
+      { key: 'litter', label: 'Litter box used normally', icon: '🪣', role: 'potty' },
+      { key: 'play', label: 'Play or exercise', icon: '🧶', role: 'activity' },
+      { key: 'brush', label: 'Brushed / grooming', icon: '🪮', role: 'hygiene' },
+      { key: 'meds', label: 'Medication given', icon: '💊', role: 'health' }
+    ],
+    Rabbit: [
+      { key: 'hay', label: 'Unlimited hay available', icon: '🌾', role: 'food' },
+      { key: 'water', label: 'Fresh water available', icon: '💧', role: 'water' },
+      { key: 'veg', label: 'Fresh veg given', icon: '🥬', role: 'portion' },
+      { key: 'pellets', label: 'Measured pellets', icon: '🥣', role: 'portion' },
+      { key: 'litter', label: 'Litter / spot clean', icon: '🧹', role: 'habitat' },
+      { key: 'exercise', label: 'Exercise or free-roam', icon: '🏃', role: 'activity' }
+    ],
+    'Guinea Pig': [
+      { key: 'hay', label: 'Hay available', icon: '🌾', role: 'food' },
+      { key: 'water', label: 'Fresh water available', icon: '💧', role: 'water' },
+      { key: 'veg', label: 'Fresh veg given', icon: '🥬', role: 'portion' },
+      { key: 'pellets', label: 'Measured pellets', icon: '🥣', role: 'portion' },
+      { key: 'cage', label: 'Cage spot-clean', icon: '🧹', role: 'habitat' },
+      { key: 'exercise', label: 'Floor time or wheel', icon: '🏃', role: 'activity' }
+    ],
+    Hamster: [
+      { key: 'food', label: 'Complete food given', icon: '🍚', role: 'food' },
+      { key: 'water', label: 'Fresh water available', icon: '💧', role: 'water' },
+      { key: 'veg', label: 'Fresh veg or treat', icon: '🥕', role: 'portion' },
+      { key: 'bedding', label: 'Bedding changed', icon: '🧹', role: 'habitat' },
+      { key: 'wheel', label: 'Wheel or exercise', icon: '🏃', role: 'activity' },
+      { key: 'handling', label: 'Checked over / handled', icon: '🤲', role: 'health' }
+    ],
+    Bird: [
+      { key: 'food', label: 'Fresh food and pellets', icon: '🌾', role: 'food' },
+      { key: 'water', label: 'Fresh water available', icon: '💧', role: 'water' },
+      { key: 'veg', label: 'Fresh veg and fruit', icon: '🥬', role: 'portion' },
+      { key: 'forage', label: 'Foraging or shredding', icon: '🪶', role: 'activity' },
+      { key: 'cage', label: 'Cage cleaned', icon: '🧹', role: 'habitat' },
+      { key: 'handling', label: 'Out of cage / handled', icon: '🤲', role: 'health' }
+    ],
+    Fish: [
+      { key: 'food', label: 'Small feeding given', icon: '🍚', role: 'food' },
+      { key: 'water', label: 'Water change done', icon: '💧', role: 'water' },
+      { key: 'filter', label: 'Filter checked or cleaned', icon: '⚙️', role: 'habitat' },
+      { key: 'heater', label: 'Heater at temperature', icon: '🌡️', role: 'habitat' },
+      { key: 'ammonia', label: 'Water tested (pH, ammonia)', icon: '🧪', role: 'health' },
+      { key: 'behaviour', label: 'Observed behaviour', icon: '👀', role: 'health' }
+    ],
+    Reptile: [
+      { key: 'food', label: 'Feeding or greens given', icon: '🥬', role: 'food' },
+      { key: 'water', label: 'Fresh water / misted', icon: '💧', role: 'water' },
+      { key: 'mist', label: 'Humidity or misting checked', icon: '💦', role: 'habitat' },
+      { key: 'basking', label: 'Basking spot checked', icon: '☀️', role: 'habitat' },
+      { key: 'shed', label: 'Shedding and skin checked', icon: '👀', role: 'health' },
+      { key: 'handling', label: 'Enclosure and handling checked', icon: '🤲', role: 'health' }
+    ],
+    Horse: [
+      { key: 'forage', label: 'Hay or forage given', icon: '🌾', role: 'food' },
+      { key: 'water', label: 'Fresh water available', icon: '💧', role: 'water' },
+      { key: 'turnout', label: 'Turnout or exercise', icon: '🐴', role: 'activity' },
+      { key: 'muck', label: 'Mucked out and bedded', icon: '🧹', role: 'habitat' },
+      { key: 'groom', label: 'Groomed / hooves checked', icon: '🪮', role: 'hygiene' },
+      { key: 'meds', label: 'Medication or supplements', icon: '💊', role: 'health' }
+    ]
+  };
+
+  // Fallback keeps the tracker usable if a species ever gains breeds before its
+  // routine is written, rather than rendering an empty checklist.
+  var DEFAULT_ROUTINE = ROUTINES.Dog;
+
+  function types() {
+    return Object.keys(BREEDS);
+  }
+
+  function routineFor(petType) {
+    var list = ROUTINES[petType] || DEFAULT_ROUTINE;
+    return list.map(function (item) {
+      return { key: item.key, label: item.label, icon: item.icon, role: item.role };
+    });
+  }
+
+  // The checklist key that answers "were they fed?" for a species.
+  function foodKeyFor(petType) {
+    var list = ROUTINES[petType] || DEFAULT_ROUTINE;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].role === 'food') return list[i].key;
+    }
+    return list[0].key;
+  }
+
+  function activityKeyFor(petType) {
+    var list = ROUTINES[petType] || DEFAULT_ROUTINE;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].role === 'activity') return list[i].key;
+    }
+    return '';
+  }
+
+  // Species that have no meaningful exercise field get a blank one.
+  function measuresActivity(petType) {
+    return activityKeyFor(petType) !== '';
+  }
+
+  /* ----------------------------------------------------------------- diet */
+
+  var DIET_NOTES = {
+    Dog: 'Complete dog food measured by the cup. Keep treats under about a tenth of their daily calories.',
+    Cat: 'Complete cat food in measured meals. Wet food adds welcome water for cats that drink little.',
+    Rabbit: 'Unlimited grass hay is the staple, fresh veg daily. Pellets are a supplement, not the main meal.',
+    'Guinea Pig': 'Grass hay, fresh veg daily, and a small portion of plain guinea-pig pellets. Avoid muesli mixes.',
+    Hamster: 'Complete hamster food, small amounts of fresh veg, and an occasional mealworm for protein.',
+    Bird: 'A quality pellet as the base, fresh veg and a little fruit, plus time to forage rather than always eating from a bowl.',
+    Fish: 'Small flake or pellet portions two or three times a day. Overfeeding is the usual cause of fouled water.',
+    Reptile: 'Species-appropriate diet. Many need fresh greens plus a calcium supplement; insectivores need appropriately sized feeder insects.',
+    Horse: 'Forage such as grass or hay for most of the day, with a balanced ration on top. Never withhold hay.'
+  };
+
+  function dietNote(petType, stage) {
+    var note = DIET_NOTES[petType] || DIET_NOTES.Dog;
+    if (/senior|older/i.test(stage || '')) {
+      note += ' Older pets often need slightly fewer calories but the same protein, so keep the food the same and cut portions.';
+    } else if (/young|under|puppy|kitten|baby/i.test(stage || '')) {
+      note += ' Young ones need frequent small meals rather than one large portion.';
+    }
+    return note;
+  }
+
   global.PetData = {
     MIXED: MIXED,
+    types: types,
     stages: optionsFor,
     breeds: breedsFor,
     noun: nounFor,
     placeholder: placeholderFor,
     hazards: hazardsFor,
+    routine: routineFor,
+    foodKey: foodKeyFor,
+    activityKey: activityKeyFor,
+    measuresActivity: measuresActivity,
+    dietNote: dietNote,
     STAGES: STAGES,
     BREEDS: BREEDS,
-    HAZARDS: HAZARDS
+    HAZARDS: HAZARDS,
+    ROUTINES: ROUTINES,
+    DIET_NOTES: DIET_NOTES
   };
 })(window);

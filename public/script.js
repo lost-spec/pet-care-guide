@@ -312,6 +312,22 @@ function looksLikeGibberish(value) {
     link.href = '/sources.html' + (query ? '?' + query : '');
   }
 
+  // Remember what the user searched for so /tracker.html knows which pet it is
+  // building a routine for. Best effort: a browser that blocks storage still
+  // gets the tracker page, it just asks for the details again.
+  function rememberPet(request) {
+    try {
+      window.localStorage.setItem('petCareGuide.pet.v1', JSON.stringify({
+        petType: request.petType,
+        breed: request.breed,
+        ageStage: request.ageStage,
+        savedAt: new Date().toISOString()
+      }));
+    } catch (err) {
+      /* storage unavailable or full; the tracker degrades to its own form */
+    }
+  }
+
   function renderHazards(data) {
     var petType = petTypeSelect.value;
     var seen = {};
@@ -516,6 +532,9 @@ function looksLikeGibberish(value) {
     };
     lastRequest = request;
     updateUrl(request);
+    // Recorded before the fetch so the tracker still opens if the API is down or
+    // unconfigured. The details have already passed validation at this point.
+    rememberPet(request);
 
     setLoading(true);
 
