@@ -121,13 +121,15 @@ async function handleSubmit(event) {
   } catch (error) {
     console.error('Error:', error);
     
+    const msg = error.data?.error || error.message || 'Unknown error';
+    
     if (error.status === 400) {
-      formError.textContent = error.data?.error || 'Invalid input. Please check your entries.';
+      formError.textContent = msg;
       formError.classList.remove('hidden');
     } else if (error.status === 404) {
-      showError('This breed was not recognized. Please check the spelling and try again.', 'Unknown Breed');
+      showError(msg, 'Unknown Breed');
     } else {
-      showError('Unable to fetch care information. Please check your connection and try again.');
+      showError(`Server error: ${msg}`);
     }
   } finally {
     setLoading(false);
