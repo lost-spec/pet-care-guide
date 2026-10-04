@@ -68,7 +68,13 @@ async function callAI(petType, breed, retry = false) {
       })
     });
   } catch (fetchError) {
-    throw new Error(`Network error: ${fetchError.message}`);
+    const details = [
+      fetchError.message,
+      fetchError.code ? `code: ${fetchError.code}` : '',
+      fetchError.cause ? `cause: ${fetchError.cause}` : '',
+      fetchError.stack ? `stack: ${fetchError.stack}` : ''
+    ].filter(Boolean).join(' | ');
+    throw new Error(`Network error for ${baseUrl}/chat/completions: ${details}`);
   }
 
   if (!response.ok) {
