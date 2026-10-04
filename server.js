@@ -53,7 +53,7 @@ async function callAI(petType, breed, retry = false) {
       'X-Title': 'Pet Care Guide'
     },
     body: JSON.stringify({
-      model: 'liquid/lfm-2.5-embedding-350m:free',
+      model: 'google/gemma-4-31b-it:free',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: `Pet type: ${petType}, Breed: ${breed}` }
