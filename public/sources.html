@@ -3,70 +3,96 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Breed-specific breeders, local shops and online sellers, with ratings and reviews.">
+  <meta name="color-scheme" content="light dark">
   <title>Pet Sources - Pet Care Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>Pet Care Guide</h1>
-      <p class="tagline">Where to find your pet</p>
-    </header>
-    <main>
-      <div class="sources-header">
-        <div class="breadcrumb">
-          <a href="index.html">← Back to Search</a>
+  <div class="aurora" aria-hidden="true"></div>
+
+  <div class="page-wrapper">
+    <div class="container">
+
+      <header class="hero">
+        <div class="hero-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="7.5" cy="8" rx="2.4" ry="3.1"></ellipse>
+            <ellipse cx="12" cy="5.8" rx="2.2" ry="3"></ellipse>
+            <ellipse cx="16.5" cy="8" rx="2.4" ry="3.1"></ellipse>
+            <path d="M12 11.2c3.1 0 5.6 2.2 5.6 4.9 0 1.9-1.5 3.1-3.4 3.1-1 0-1.6-.4-2.2-.4s-1.2.4-2.2.4c-1.9 0-3.4-1.2-3.4-3.1 0-2.7 2.5-4.9 5.6-4.9z"></path>
+          </svg>
         </div>
-        <h2 id="sources-title">Sources for <span id="breed-name"></span> (<span id="pet-type-name"></span>)</h2>
-        <p id="location-display" class="location-display"></p>
-        <p class="sources-disclaimer">Results from web search. Verify details directly with sellers. Adoption is a great option — check local shelters!</p>
-      </div>
+        <h1 class="hero-title">Where to Get</h1>
+        <p class="hero-tagline">Breeders, local shops and trusted online sellers</p>
+      </header>
 
-      <div class="filters-bar">
-        <div class="filter-group">
-          <label for="type-filter">Filter by type:</label>
-          <select id="type-filter">
-            <option value="all">All</option>
-            <option value="local">Local Shops/Breeders</option>
-            <option value="shopping">Online Stores</option>
-            <option value="organic">Web Results</option>
-          </select>
+      <main class="main-content">
+
+        <div class="sources-header">
+          <div class="breadcrumb">
+            <a href="index.html">&larr; Back to Search</a>
+          </div>
+          <h2 id="sources-title">Sources for <span id="breed-name"></span> (<span id="pet-type-name"></span>)</h2>
+          <p id="location-display" class="location-display"></p>
+          <p class="sources-disclaimer">Results from web search. Verify details directly with sellers. Adoption is a great option — check local shelters!</p>
         </div>
-        <div class="filter-group">
-          <label for="sort-filter">Sort by:</label>
-          <select id="sort-filter">
-            <option value="relevance">Relevance</option>
-            <option value="rating">Rating (High to Low)</option>
-            <option value="price">Price (Low to High)</option>
-          </select>
+
+        <div class="filters-bar">
+          <div class="filter-group">
+            <label for="type-filter">Filter by type</label>
+            <select id="type-filter">
+              <option value="all">All</option>
+              <option value="local">Local Shops/Breeders</option>
+              <option value="shopping">Online Stores</option>
+              <option value="organic">Web Results</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="sort-filter">Sort by</label>
+            <select id="sort-filter">
+              <option value="relevance">Relevance</option>
+              <option value="rating">Rating (High to Low)</option>
+              <option value="price">Price (Low to High)</option>
+            </select>
+          </div>
         </div>
-      </div>
 
-      <div id="sources-loading" class="sources-loading">
-        <span class="spinner-small" aria-hidden="true"></span>
-        <span>Loading sources...</span>
-      </div>
+        <div id="sources-loading" class="sources-loading hidden" role="status">
+          <span class="spinner-small" aria-hidden="true"></span>
+          <span>Loading sources…</span>
+        </div>
 
-      <p id="sources-error" class="sources-error hidden" role="alert"></p>
+        <p id="sources-error" class="sources-error hidden" role="alert"></p>
 
-      <div id="sources-grid" class="sources-grid"></div>
+        <div id="sources-grid" class="sources-grid"></div>
 
-      <div id="no-results" class="no-results hidden">
-        <p>No sources found. Try a different location or check local shelters.</p>
-        <a href="index.html" class="btn-primary">New Search</a>
-      </div>
+        <div id="no-results" class="no-results hidden">
+          <p>No sources found. Try a different location or check local shelters.</p>
+          <a href="index.html" class="btn btn-secondary">New Search</a>
+        </div>
 
-      <div id="pagination" class="pagination hidden">
-        <button id="prev-page" class="btn-secondary">Previous</button>
-        <span id="page-info">Page 1 of 1</span>
-        <button id="next-page" class="btn-secondary">Next</button>
-      </div>
-    </main>
-    <footer>
-      <p class="disclaimer">General guidance only. Consult a vet for specific health or diet decisions.</p>
-      <p class="copyright">&copy; 2026 Pet Care Guide</p>
-    </footer>
+        <div id="pagination" class="pagination hidden">
+          <button type="button" id="prev-page" class="btn btn-secondary">Previous</button>
+          <span id="page-info">Page 1 of 1</span>
+          <button type="button" id="next-page" class="btn btn-secondary">Next</button>
+        </div>
+
+      </main>
+
+      <footer class="site-footer">
+        <p class="disclaimer">General guidance only. Consult a vet for specific health or diet decisions.</p>
+        <p class="copyright">&copy; 2026 Pet Care Guide</p>
+      </footer>
+
+    </div>
   </div>
+
+  <script src="birds.js"></script>
+  <script src="ui.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

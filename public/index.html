@@ -3,98 +3,192 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Personalized feeding and environment care guidance for any pet breed.">
+  <meta name="color-scheme" content="light dark">
   <title>Pet Care Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>Pet Care Guide</h1>
-      <p class="tagline">Your companion for happy, healthy pets</p>
-    </header>
-    <main>
-      <form id="pet-form" class="pet-form">
-        <div class="form-group">
-          <label for="pet-type">Pet Type</label>
-          <select id="pet-type" name="petType" required>
-            <option value="">Select a pet type</option>
-            <option value="Dog">Dog</option>
-            <option value="Cat">Cat</option>
-            <option value="Rabbit">Rabbit</option>
-            <option value="Bird">Bird</option>
-            <option value="Hamster">Hamster</option>
-            <option value="Fish">Fish</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="breed">Breed</label>
-          <input type="text" id="breed" name="breed" placeholder="e.g., Golden Retriever, Siamese, Holland Lop" required maxlength="50">
-        </div>
-        <div class="form-group">
-          <label for="location">Location (optional)</label>
-          <input type="text" id="location" name="location" placeholder="e.g., New York, NY or London, UK" maxlength="100">
-        </div>
-        <button type="submit" id="submit-btn" class="btn-primary">
-          <span class="btn-text">Get Care Info</span>
-          <span class="spinner hidden" aria-hidden="true"></span>
-        </button>
-        <p id="form-error" class="error-message hidden" role="alert"></p>
-      </form>
+  <!-- Decorative animated background (canvas is injected by birds.js) -->
+  <div class="aurora" aria-hidden="true"></div>
 
-      <section id="results" class="results hidden" aria-live="polite">
-        <div id="summary" class="summary"></div>
+  <a class="skip-link" href="#pet-form">Skip to care search</a>
 
-        <div class="sections-grid">
-          <section class="section-card" id="feeding-section">
-            <h2>Feeding</h2>
-            <div id="feeding-keypoints" class="keypoints-grid"></div>
-            <button type="button" class="btn-read-more" data-target="feeding-details" aria-expanded="false">
-              <span class="read-more-text">Read more</span>
-              <span class="chevron" aria-hidden="true">▼</span>
-            </button>
-            <p id="feeding-details" class="details hidden"></p>
-          </section>
+  <div class="page-wrapper">
+    <div class="container">
 
-          <section class="section-card" id="environment-section">
-            <h2>Environment</h2>
-            <div id="environment-keypoints" class="keypoints-grid"></div>
-            <button type="button" class="btn-read-more" data-target="environment-details" aria-expanded="false">
-              <span class="read-more-text">Read more</span>
-              <span class="chevron" aria-hidden="true">▼</span>
-            </button>
-            <p id="environment-details" class="details hidden"></p>
-          </section>
+      <header class="hero">
+        <div class="hero-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="7.5" cy="8" rx="2.4" ry="3.1"></ellipse>
+            <ellipse cx="12" cy="5.8" rx="2.2" ry="3"></ellipse>
+            <ellipse cx="16.5" cy="8" rx="2.4" ry="3.1"></ellipse>
+            <path d="M12 11.2c3.1 0 5.6 2.2 5.6 4.9 0 1.9-1.5 3.1-3.4 3.1-1 0-1.6-.4-2.2-.4s-1.2.4-2.2.4c-1.9 0-3.4-1.2-3.4-3.1 0-2.7 2.5-4.9 5.6-4.9z"></path>
+          </svg>
         </div>
+        <h1 class="hero-title">Pet Care Guide</h1>
+        <p class="hero-tagline">Feeding &amp; environment guidance for your companion</p>
+      </header>
 
-        <div id="warnings" class="warnings hidden" role="alert">
-          <h3>⚠️ Important Warnings</h3>
-          <ul id="warnings-list"></ul>
-        </div>
+      <main class="main-content">
 
-        <section id="sources-section" class="section-card hidden" aria-live="polite">
-          <h2>🐾 Where to Get</h2>
-          <p class="sources-disclaimer">Results from web search. Verify details directly with sellers. Adoption is a great option — check local shelters!</p>
-          <div id="sources-grid" class="sources-grid"></div>
-          <div id="sources-loading" class="sources-loading hidden">
-            <span class="spinner-small" aria-hidden="true"></span>
-            <span>Finding sources...</span>
+        <!-- ============ PET TYPE + BREED + WHERE TO GET ============ -->
+        <form id="pet-form" class="pet-form glass-card" novalidate tabindex="-1">
+          <div class="form-intro">
+            <h2 class="form-title">Find care guidance</h2>
+            <p class="form-subtitle">Choose a pet type, tell us the breed, and add a location if you want nearby sources.</p>
           </div>
-          <p id="sources-error" class="sources-error hidden" role="alert"></p>
-        </section>
-      </section>
 
-      <section id="error-state" class="error-state hidden" role="alert">
-        <div class="error-icon" aria-hidden="true">⚠️</div>
-        <h2 id="error-title">Something went wrong</h2>
-        <p id="error-message"></p>
-        <button type="button" id="retry-btn" class="btn-primary">Try Again</button>
-      </section>
-    </main>
-    <footer>
-      <p class="disclaimer">General guidance only. Consult a vet for specific health or diet decisions.</p>
-      <p class="copyright">&copy; 2026 Pet Care Guide</p>
-    </footer>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label" for="pet-type">Pet Type</label>
+              <div class="select-wrap">
+                <select id="pet-type" name="petType" autocomplete="off">
+                  <option value="">Select…</option>
+                  <option value="Dog">🐶 Dog</option>
+                  <option value="Cat">🐱 Cat</option>
+                  <option value="Rabbit">🐰 Rabbit</option>
+                  <option value="Bird">🦜 Bird</option>
+                  <option value="Hamster">🐹 Hamster</option>
+                  <option value="Guinea Pig">🐹 Guinea Pig</option>
+                  <option value="Reptile">🦎 Reptile</option>
+                  <option value="Fish">🐠 Fish</option>
+                  <option value="Horse">🐴 Horse</option>
+                </select>
+                <span class="select-chevron" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="field">
+                <input type="text" id="breed" name="breed" placeholder=" " maxlength="60" autocomplete="off" spellcheck="false" required>
+                <label for="breed">Breed</label>
+              </div>
+              <p class="field-hint">e.g. Golden Retriever, Siamese, Holland Lop</p>
+            </div>
+
+            <div class="form-group">
+              <div class="field">
+                <input type="text" id="location" name="location" placeholder=" " maxlength="80" autocomplete="off">
+                <label for="location">Location <span class="label-optional">(optional)</span></label>
+              </div>
+              <p class="field-hint">City or region, e.g. Portland, OR</p>
+            </div>
+          </div>
+
+          <button type="submit" id="submit-btn" class="btn btn-primary">
+            <span class="btn-text">Get Care Info</span>
+            <span class="spinner" aria-hidden="true"></span>
+          </button>
+
+          <p id="form-error" class="form-error hidden" role="alert"></p>
+        </form>
+
+        <!-- ============ SUMMARY ============ -->
+        <section id="results" class="results hidden" aria-live="polite" aria-label="Care guidance">
+          <div class="summary-card glass-card reveal">
+            <div class="summary-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 21s-7-4.6-7-9.6A4.4 4.4 0 0 1 12 8a4.4 4.4 0 0 1 7 3.4c0 5-7 9.6-7 9.6z"></path>
+              </svg>
+            </div>
+            <div>
+              <p id="summary" class="summary-text"></p>
+            </div>
+          </div>
+
+          <!-- ============ FEEDING ============ -->
+          <section class="info-card glass-card reveal" aria-labelledby="feeding-title">
+            <header class="info-card-head">
+              <span class="pill pill-feeding" aria-hidden="true">🍽️</span>
+              <h2 id="feeding-title" class="info-card-title">Feeding</h2>
+            </header>
+            <div id="feeding-keypoints" class="keypoint-grid"></div>
+            <button type="button" class="btn-read-more" data-target="feeding-details" aria-expanded="false" aria-controls="feeding-details">
+              <span class="read-more-text">Read more</span>
+              <span class="chevron" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </span>
+            </button>
+            <div id="feeding-details" class="details hidden"></div>
+          </section>
+
+          <!-- ============ ENVIRONMENT ============ -->
+          <section class="info-card glass-card reveal" aria-labelledby="environment-title">
+            <header class="info-card-head">
+              <span class="pill pill-environment" aria-hidden="true">🏡</span>
+              <h2 id="environment-title" class="info-card-title">Environment</h2>
+            </header>
+            <div id="environment-keypoints" class="keypoint-grid"></div>
+            <button type="button" class="btn-read-more" data-target="environment-details" aria-expanded="false" aria-controls="environment-details">
+              <span class="read-more-text">Read more</span>
+              <span class="chevron" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </span>
+            </button>
+            <div id="environment-details" class="details hidden"></div>
+          </section>
+
+          <!-- ============ WARNINGS ============ -->
+          <section id="warnings" class="warnings-card hidden" aria-labelledby="warnings-title">
+            <header class="warnings-head">
+              <span class="pill pill-warning" aria-hidden="true">⚠️</span>
+              <h2 id="warnings-title" class="warnings-title">Worth knowing</h2>
+            </header>
+            <ul id="warnings-list" class="warnings-list"></ul>
+          </section>
+
+          <!-- ============ WHERE TO GET ============ -->
+          <section id="sources-section" class="info-card glass-card sources-section hidden" aria-labelledby="sources-title" aria-live="polite">
+            <header class="info-card-head">
+              <span class="pill pill-sources" aria-hidden="true">📍</span>
+              <h2 id="sources-title" class="info-card-title">Where to Get</h2>
+            </header>
+            <p class="sources-hint">Online listings and local options found for this breed. Always verify sellers directly and consider adopting from a shelter or rescue.</p>
+
+            <div id="sources-loading" class="sources-loading hidden">
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+            </div>
+
+            <p id="sources-error" class="sources-error hidden" role="alert"></p>
+
+            <div id="sources-grid" class="source-grid"></div>
+          </section>
+        </section>
+
+        <!-- ============ ERROR STATE ============ -->
+        <section id="error-state" class="error-card glass-card hidden" role="alert">
+          <span class="error-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"></circle>
+              <line x1="12" y1="7.5" x2="12" y2="13"></line>
+              <line x1="12" y1="16.4" x2="12.01" y2="16.4"></line>
+            </svg>
+          </span>
+          <h2 id="error-title" class="error-title">Something went wrong</h2>
+          <p id="error-message" class="error-message"></p>
+          <button type="button" id="retry-btn" class="btn btn-primary">Try again</button>
+        </section>
+
+      </main>
+
+      <footer class="site-footer">
+        <p class="disclaimer">General guidance only. Consult a vet for specific health or diet decisions.</p>
+        <p class="copyright">&copy; 2026 Pet Care Guide</p>
+      </footer>
+
+    </div>
   </div>
+
+  <script src="birds.js"></script>
+  <script src="ui.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
