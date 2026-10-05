@@ -373,6 +373,170 @@ app.post('/api/tracker-review', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Pet match: recommend which species and breed suits this household.
+//
+// The answers are a fixed set of keys with a fixed set of allowed values, so
+// both ends validate against the same vocabulary. That keeps the prompt short
+// and stops a crafted answer from smuggling instructions into the model.
+const MATCH_QUESTIONS = {
+  home: ['flat', 'house-no-yard', 'house-yard', 'rural'],
+  outdoor: ['none', 'balcony', 'small-yard', 'large-yard'],
+  hoursAlone: ['0-2', '3-5', '6-8', '9plus'],
+  activity: ['low', 'moderate', 'high'],
+  experience: ['none', 'some', 'lots'],
+  household: ['alone', 'adults', 'kids-young', 'kids-older', 'mixed', 'other-pets'],
+  space: ['cramped', 'small', 'medium', 'large'],
+  noiseTolerance: ['low', 'medium', 'high'],
+  grooming: ['none', 'low', 'medium', 'high'],
+  budget: ['tight', 'moderate', 'flexible'],
+  time: ['hours-per-week', 'daily', 'most-days'],
+  reason: ['companionship', 'calm-company', 'kids-bond', 'outdoor', 'interest', 'work']
+};
+
+const MATCH_ANSWER_LABELS = {
+  home: { flat: 'a flat or apartment', 'house-no-yard': 'a house with no yard', 'house-yard': 'a house with a yard', rural: 'a rural property' },
+  outdoor: { none: 'no outdoor space at all', balcony: 'a balcony only', 'small-yard': 'a small yard or patio', 'large-yard': 'a large yard or open land' },
+  hoursAlone: { '0-2': '0-2 hours alone on a typical weekday', '3-5': '3-5 hours alone', '6-8': '6-8 hours alone', '9plus': '9+ hours alone' },
+  activity: { low: 'a calm, low-key household', moderate: 'a moderate amount of daily activity', high: 'an active, outdoorsy household' },
+  experience: { none: 'no experience with this kind of pet', some: 'some experience', lots: 'a lot of experience' },
+  household: { alone: 'living alone', adults: 'adults only', 'kids-young': 'young children under 6', 'kids-older': 'children 6 and over', mixed: 'a mix of adults and children', 'other-pets': 'other pets already at home' },
+  space: { cramped: 'very little indoor space', small: 'a small home', medium: 'a medium home', large: 'a large home' },
+  noiseTolerance: { low: 'low tolerance for noise', medium: 'moderate tolerance for noise', high: 'high tolerance for noise' },
+  grooming: { none: 'no interest in grooming', low: 'minimal grooming', medium: 'regular grooming', high: 'happy to groom often' },
+  budget: { tight: 'a tight budget', moderate: 'a moderate budget', flexible: 'a flexible budget' },
+  time: { 'hours-per-week': 'a couple of hours a week', daily: 'some time every day', 'most-days': 'a good amount of time most days' },
+  reason: { companionship: 'companionship', 'calm-company': 'calm, quiet company', 'kids-bond': 'a bond with children', outdoor: 'being outdoors and active', interest: 'a genuine interest or hobby', work: 'work, such as therapy or farm work' }
+};
+
+const MATCH_SYSTEM_PROMPT = `You help someone choose which species and breed of pet will genuinely suit their home and life. You are matching a living animal to a household, so honesty matters more than being agreeable.
+
+You are given a fixed set of answers about the household: type of home, outdoor space, hours alone on a typical weekday, activity level, experience, who lives there, indoor space, noise tolerance, grooming effort, budget, time available, and the main reason they want a pet.
+
+Respond with ONLY valid JSON, no markdown, no extra text, in exactly this shape:
+{
+  "headline": "one short sentence naming the overall direction, max 90 characters",
+  "matches": [
+    {
+      "species": "one species from the list below",
+      "breed": "a specific breed, or a short type such as 'any domestic shorthair'",
+      "why": "2 or 3 short sentences tying the match to their actual answers",
+      "effort": "a time and effort rating: low, medium or high",
+      "cost": "a rough ongoing cost rating: low, medium or high",
+      "watchOut": "the single most important thing to know before committing"
+    }
+  ],
+  "runnerUp": "one or two sentences on the second best direction, if it is genuinely different",
+  "considerations": ["2 to 4 things this household must weigh up before getting any pet"],
+  "vetNote": "one short note on what a vet or shelter should check, or an empty string"
+}
+
+Rules:
+- Suggest 2 to 3 matches, ordered best first. Never suggest more than 3.
+- Only use species from this list: Dog, Cat, Rabbit, Bird, Hamster, Guinea Pig, Reptile, Fish, Horse.
+- Only suggest a breed or type that genuinely exists for that species. Never invent a breed.
+- Judge the animal against the household they described, especially hours alone, space, noise tolerance and who lives there.
+- Be honest and sometimes discouraging. If their answers point to a poor fit for most pets, say so plainly in "considerations" rather than picking something anyway. Never flatter them to be agreeable.
+- A pet is a 10 to 30 year commitment. Do not describe any animal as easy, low maintenance or a gift.
+- Never invent figures, prices or guarantees. Keep cost as a rating, not a number.
+- Do not push a specific breed or a purchase. Prefer rescue and shelter animals, and say so.
+- Never suggest an animal that would be unsafe for the household, such as a venomous or constricting reptile for a home with young children, or any pet for someone who has said they cannot keep one.
+- Keep the tone calm, plain and specific. No emoji, no hype, no scolding.`;
+
+function validateMatch(body) {
+  if (!body || typeof body !== 'object') return 'Request body must be an object';
+  const answers = body.answers;
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) return 'answers must be an object';
+
+  const required = Object.keys(MATCH_QUESTIONS);
+  for (const key of required) {
+    const value = answers[key];
+    if (typeof value !== 'string' || !MATCH_QUESTIONS[key].includes(value)) {
+      return 'Invalid answer for "' + key + '"';
+    }
+  }
+
+  const extra = Object.keys(answers).filter((k) => !MATCH_QUESTIONS[k]);
+  if (extra.length) return 'Unexpected answer key: ' + extra[0];
+
+  return null;
+}
+
+function buildMatchContext(body) {
+  const answers = body.answers || {};
+  const lines = [];
+  for (const key of Object.keys(MATCH_QUESTIONS)) {
+    const label = (MATCH_ANSWER_LABELS[key] || {})[answers[key]] || answers[key];
+    if (label) lines.push(`${label}`);
+  }
+  return 'Household details:\n' + lines.map((l) => '- ' + l).join('\n');
+}
+
+const MATCH_EFFORT = ['low', 'medium', 'high'];
+const MATCH_COST = ['low', 'medium', 'high'];
+
+function normaliseMatch(result) {
+  const source = result && typeof result === 'object' ? result : {};
+
+  // The model may only speak about species it was offered, so anything else is
+  // dropped rather than rendered.
+  const list = (value, max) => (Array.isArray(value)
+    ? value.map((item) => clampText(item, 260)).filter(Boolean).slice(0, max)
+    : []);
+
+  const matches = (Array.isArray(source.matches) ? source.matches : [])
+    .slice(0, 3)
+    .map((item) => ({
+      species: SPECIES.includes(item && item.species) ? item.species : '',
+      breed: clampText(item && item.breed, 80),
+      why: clampText(item && item.why, 400),
+      effort: MATCH_EFFORT.includes(item && item.effort) ? item.effort : 'medium',
+      cost: MATCH_COST.includes(item && item.cost) ? item.cost : 'medium',
+      watchOut: clampText(item && item.watchOut, 220)
+    }))
+    .filter((item) => item.species && item.breed);
+
+  return {
+    headline: clampText(source.headline, 140) || 'Here is what would suit your household best.',
+    matches,
+    runnerUp: clampText(source.runnerUp, 260),
+    considerations: list(source.considerations, 4),
+    vetNote: clampText(source.vetNote, 300)
+  };
+}
+
+app.post('/api/pet-match', async (req, res) => {
+  const validationError = validateMatch(req.body);
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
+
+  try {
+    const result = await callAI(req.body, false, {
+      systemPrompt: MATCH_SYSTEM_PROMPT,
+      userContent: buildMatchContext(req.body),
+      temperature: 0.5,
+      maxTokens: 1400
+    });
+
+    const match = normaliseMatch(result);
+    // A reply with no usable species is a failure, not an empty result the user
+    // should read as "nothing suits you".
+    if (!match.matches.length) {
+      return res.status(502).json({ error: 'The AI did not return a usable match. Please try again.' });
+    }
+
+    res.json(match);
+  } catch (error) {
+    console.error('Pet match error:', error.message);
+    const status = error.status || 500;
+    res.status(status).json({
+      error: error.message || 'Could not build a match. Please try again.',
+      code: error.code
+    });
+  }
+});
+
 async function serpFetch(query, apiKey) {
   const url = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&api_key=${apiKey}&engine=google&num=10`;
 

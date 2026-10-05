@@ -298,5 +298,393 @@ function recordedFrom(dom, id) { return Number(dom.nodes.get(id).textContent); }
     week && week.trackedDays <= 7 && week.fedDays <= 7, week && JSON.stringify(week));
 }
 
-console.log('\n' + (bad ? bad + ' runtime checks FAILED' : 'all runtime checks passed'));
-process.exit(bad ? 1 : 0);
+// -------------------------------------------------------------- match page
+// The question list is read from the page rather than hardcoded here, so this
+// stub cannot fall out of step with what match.js actually asks for.
+const MATCH_PAGE = fs.readFileSync('public/match.html', 'utf8');
+const MATCH_FORM_HTML = MATCH_PAGE.match(/id="match-form"[\s\S]*?<\/form>/)[0];
+
+// The real option values, in document order, grouped by question. match.js
+// validates every answer against its own allowed list, so a stub that invents
+// values like "a"/"b" would make every answer look missing. The harness has to
+// feed the same strings the page would submit.
+const MATCH_OPTIONS = (() => {
+  const options = {};
+  const inputs = MATCH_FORM_HTML.match(/<input[^>]*>/g) || [];
+  inputs.forEach((tag) => {
+    const name = (tag.match(/name="([^"]+)"/) || [])[1];
+    const value = (tag.match(/value="([^"]+)"/) || [])[1];
+    if (!name || value === undefined) return;
+    (options[name] = options[name] || []).push(value);
+  });
+  return options;
+})();
+
+const MATCH_KEYS = Object.keys(MATCH_OPTIONS);
+
+// The elements match.js toggles start out hidden in the markup. Seed those
+// classes so "was this revealed?" checks are meaningful instead of passing
+// just because nothing was ever marked hidden.
+const MATCH_INITIAL_CLASSES = (() => {
+  const classes = {};
+  const tags = MATCH_PAGE.match(/<(?:div|section|p|button)[^>]*id="match-[^"]*"[^>]*>/g) || [];
+  tags.forEach((tag) => {
+    const id = (tag.match(/id="([^"]+)"/) || [])[1];
+    const classAttr = (tag.match(/class="([^"]*)"/) || [])[1] || '';
+    classes[id] = classAttr.split(/\s+/).filter(Boolean);
+  });
+  return classes;
+})();
+
+// public/match.js is a separate entry point with its own element ids, so it
+// needs its own stub. The DOM here is closer to a real one: it has to support
+// querySelector on name="x" and :checked, plus createElement returning nodes
+// that record what was assigned to them, because the whole point is to prove
+// the AI's text is written as text.
+function makeMatchDom() {
+  const listeners = new Map();
+  const nodes = new Map();
+
+  // matching is declared below and used by both the node querySelector and the
+  // document one, so both see the same rules.
+  function el(id) {
+    const node = {
+      id,
+      value: '',
+      textContent: '',
+      innerHTML: '',
+      className: '',
+      tag: id,
+      type: '',
+      name: '',
+      checked: false,
+      disabled: false,
+      children: [],
+      classes: new Set(),
+      classList: {
+        add(c) { node.classes.add(c); },
+        remove(c) { node.classes.delete(c); },
+        contains(c) { return node.classes.has(c); },
+        toggle(c, force) {
+          const on = force === undefined ? !node.classes.has(c) : !!force;
+          if (on) node.classes.add(c); else node.classes.delete(c);
+          return on;
+        }
+      },
+      appendChild(child) { node.children.push(child); return child; },
+      addEventListener(type, fn) { listeners.set(id + ':' + type, fn); },
+      // Each node searches its own subtree, which is how a browser behaves.
+      querySelector(sel) { return all(node, sel)[0] || null; },
+      querySelectorAll(sel) { return all(node, sel); },
+      focus() {},
+      scrollIntoView() {}
+    };
+
+    // Assigning textContent replaces the node's children in a real DOM, and
+    // match.js relies on that to clear a list before refilling it. A plain
+    // property would silently keep the old children, so a resubmit would look
+    // like it had stacked two sets of results.
+    Object.defineProperty(node, 'textContent', {
+      get() { return node.text; },
+      set(value) { node.text = value === undefined || value === null ? '' : String(value); node.children = []; },
+      enumerable: true
+    });
+
+    return node;
+  }
+
+  function all(node, sel, out = []) {
+    (node.children || []).forEach((c) => {
+      if (!c) return;
+      if (matching(c, sel)) out.push(c);
+      all(c, sel, out);
+    });
+    return out;
+  }
+
+  const dom = {
+    nodes,
+    listeners,
+    fire(id, type) {
+      const fn = listeners.get(id + ':' + type);
+      if (!fn) throw new Error('no listener for ' + id + ':' + type);
+      return fn({ preventDefault() {} });
+    },
+    seed(id, patch) { Object.assign(el(id), patch); return nodes.get(id); },
+    store(id, node) { nodes.set(id, node); return node; },
+    document: {
+      readyState: 'complete',
+      createElement(tag) { return el(tag); },
+      createTextNode(text) { return { textNode: true, textContent: String(text), children: [] }; },
+      getElementById(id) {
+        if (!nodes.has(id)) nodes.set(id, el(id));
+        return nodes.get(id);
+      },
+      addEventListener() {}
+    }
+  };
+
+  // Rebuild the form as a real tree: one fieldset per question, with labels
+  // wrapping inputs that carry the page's own name/value pairs.
+  const form = el('match-form');
+  MATCH_KEYS.forEach((key) => {
+    const fieldset = el('fieldset');
+    MATCH_OPTIONS[key].forEach((value, i) => {
+      const label = el('label');
+      label.className = 'choice';
+      const input = el('input');
+      input.type = 'input';
+      input.name = key;
+      input.value = value;
+      input.checked = false;
+      input.id = key + '-' + i;
+      label.appendChild(input);
+      fieldset.children.push(label);
+    });
+    form.children.push(fieldset);
+  });
+  nodes.set('match-form', form);
+  dom.formNode = form;
+
+  ['match-error', 'match-results', 'match-list', 'match-headline', 'match-runner-up',
+    'match-runner-up-text', 'match-considerations', 'match-considerations-list',
+    'match-vet-note', 'match-error-card', 'match-error-detail', 'match-retry',
+    'match-submit'].forEach((id) => {
+    const node = el(id);
+    (MATCH_INITIAL_CLASSES[id] || []).forEach((c) => node.classes.add(c));
+    nodes.set(id, node);
+  });
+
+  return dom;
+}
+
+function loadMatch(dom) {
+  const ctx = {
+    document: dom.document,
+    window: { setTimeout: () => 0, clearTimeout: () => {}, confirm: () => true },
+    JSON, Math, Date, Number, String, Object, Array, isFinite, RegExp, Boolean, console
+  };
+  ctx.window.document = dom.document;
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync('public/match.js', 'utf8'), ctx);
+  return ctx;
+}
+
+// Answer a question through the same selector the page uses, so the harness
+// cannot accidentally tick something the page could not see.
+// :checked has to reflect current state, so it is evaluated at query time
+// rather than stored. A real browser does the same thing.
+function matching(node, sel) {
+  const attr = sel.match(/\[name="([^"]+)"\]/);
+  const needsChecked = sel.indexOf(':checked') !== -1;
+  if (sel.indexOf('input') === 0 && node.type !== 'input') return false;
+  if (sel.indexOf('label') === 0 && node.tag !== 'label') return false;
+  // className and classList are two ways of setting the same thing in the DOM,
+  // so a selector has to accept either.
+  const wantsClass = sel.slice(1);
+  if (sel.indexOf('.') === 0
+    && !node.classes.has(wantsClass) && String(node.className).split(/\s+/).indexOf(wantsClass) === -1) {
+    return false;
+  }
+  if (attr && node.name !== attr[1]) return false;
+  if (needsChecked && !node.checked) return false;
+  return true;
+}
+
+function answer(dom, key, valueIndex = 0) {
+  const inputs = dom.formNode.querySelectorAll('input[name="' + key + '"]');
+  if (!inputs.length) return null;
+  inputs.forEach((input) => { input.checked = false; });
+  inputs[valueIndex].checked = true;
+  return inputs[valueIndex];
+}
+
+function pickAll(dom) { MATCH_KEYS.forEach((key) => answer(dom, key)); }
+
+// 9 to 14. match.js renders after its fetch resolves, so these cases have to
+// await the promise the submit handler returns. A synchronous assertion here
+// would test the spinner, not the page.
+async function matchTests() {
+
+// 9. An unanswered question must be refused before any request is made.
+{
+  const dom = makeMatchDom();
+  const ctx = loadMatch(dom);
+  let called = 0;
+  ctx.fetch = () => { called++; return Promise.resolve({ ok: true, json: () => Promise.resolve({}) }); };
+  ctx.window.fetch = ctx.fetch;
+
+  await dom.fire('match-form', 'submit');
+  check('match: an empty form does not call the server', called === 0, called + ' requests');
+  check('match: the empty form explains what is missing',
+    !dom.nodes.get('match-error').classes.has('hidden'),
+    dom.nodes.get('match-error').textContent);
+  check('match: it names question 1', /Question 1/.test(dom.nodes.get('match-error').textContent),
+    dom.nodes.get('match-error').textContent);
+}
+
+// 10. A partially answered form names the specific missing question, not all of them.
+{
+  const dom = makeMatchDom();
+  const ctx = loadMatch(dom);
+  ctx.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+  ctx.window.fetch = ctx.fetch;
+
+  ['home', 'outdoor', 'hoursAlone', 'activity', 'experience', 'household', 'space']
+    .forEach((key) => answer(dom, key));
+  await dom.fire('match-form', 'submit');
+
+  const msg = dom.nodes.get('match-error').textContent;
+  check('match: only the unanswered questions are named', /Question 8/.test(msg) && !/Question 1\b/.test(msg), msg);
+}
+
+// 11. A complete form sends every answer, and the chosen chips are visible.
+{
+  const dom = makeMatchDom();
+  const ctx = loadMatch(dom);
+  const sent = [];
+  ctx.fetch = (url, opts) => {
+    sent.push(JSON.parse(opts.body));
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({
+      headline: 'A calm indoor cat would suit you best.',
+      matches: [{ species: 'Cat', breed: 'Domestic Shorthair', why: 'Quiet and self-sufficient.',
+        effort: 'low', cost: 'medium', watchOut: 'They still need daily company.' }],
+      runnerUp: 'A rabbit would work if you want a companion nearby.',
+      considerations: ['Pets are a 10 to 30 year commitment.', 'Adopt from a shelter where you can.'],
+      vetNote: 'Ask the shelter about vaccinations.'
+    }) });
+  };
+  ctx.window.fetch = ctx.fetch;
+
+  // Deliberately not the first option everywhere, so a harness that ignored the
+  // tick and read option 0 by default would be caught.
+  MATCH_KEYS.forEach((key, i) => answer(dom, key, i % 2));
+  await dom.fire('match-form', 'submit');
+
+  check('match: a complete form calls the server', sent.length === 1, sent.length + ' requests');
+  const answers = sent[0] && sent[0].answers;
+  check('match: every answer is sent', answers && Object.keys(answers).length === 12,
+    answers ? Object.keys(answers).length + ' answers' : 'none');
+  const sentValues = MATCH_KEYS.map((k) => answers && answers[k]);
+  const expected = MATCH_KEYS.map((k, i) => MATCH_OPTIONS[k][i % 2]);
+  check('match: answers are the chosen values, not the first option',
+    sentValues.join('|') === expected.join('|'), sentValues.join(','));
+  // Only the chosen chip in each group carries is-selected; an unchecked one
+  // carrying it would tell the user they picked something they did not.
+  const chosen = dom.formNode.querySelectorAll('label')
+    .filter((label) => {
+      const input = label.querySelector('input');
+      return input && input.checked;
+    });
+  const highlighted = dom.formNode.querySelectorAll('label')
+    .filter((label) => label.classes.has('is-selected'));
+  check('match: exactly the chosen chips are highlighted',
+    chosen.length === 12 && highlighted.length === 12,
+    chosen.length + ' chosen, ' + highlighted.length + ' highlighted');
+
+  check('match: results are revealed', !dom.nodes.get('match-results').classes.has('hidden'));
+  check('match: the headline is set', /cat/i.test(dom.nodes.get('match-headline').textContent),
+    dom.nodes.get('match-headline').textContent);
+  check('match: one card per match', dom.nodes.get('match-list').children.length === 1,
+    dom.nodes.get('match-list').children.length + ' cards');
+  check('match: the runner up is shown', !dom.nodes.get('match-runner-up').classes.has('hidden'));
+  check('match: considerations are listed',
+    dom.nodes.get('match-considerations-list').children.length === 2,
+    dom.nodes.get('match-considerations-list').children.length + ' points');
+  check('match: the vet note is shown', !dom.nodes.get('match-vet-note').classes.has('hidden'));
+  check('match: the error box is hidden on success',
+    dom.nodes.get('match-error').classes.has('hidden'));
+  check('match: the busy label is restored', dom.nodes.get('match-submit').textContent === 'Show my matches',
+    dom.nodes.get('match-submit').textContent);
+}
+
+// 12. A hostile reply must not be able to inject markup.
+{
+  const dom = makeMatchDom();
+  const ctx = loadMatch(dom);
+  ctx.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({
+    headline: '<img src=x onerror=alert(1)>',
+    matches: [{ species: 'Cat', breed: '<script>alert(2)</script>', why: '<b>bold</b>',
+      effort: 'low', cost: 'low', watchOut: '<i>watch</i>' }],
+    considerations: ['<script>alert(3)</script>']
+  }) });
+  ctx.window.fetch = ctx.fetch;
+
+  pickAll(dom);
+  await dom.fire('match-form', 'submit');
+
+  const html = dom.nodes.get('match-list').innerHTML;
+  check('match: injected markup is not written as HTML',
+    html === '' && !/<script>/.test(html), JSON.stringify(html));
+  check('match: the injected script is kept as plain text',
+    dom.nodes.get('match-headline').textContent.indexOf('<img') === 0,
+    dom.nodes.get('match-headline').textContent);
+  check('match: consideration markup is not rendered',
+    dom.nodes.get('match-considerations-list').children[0].innerHTML === '',
+    JSON.stringify(dom.nodes.get('match-considerations-list').children[0].innerHTML));
+}
+
+// 13. Submitting twice must replace the results, not stack them up.
+{
+  const dom = makeMatchDom();
+  const ctx = loadMatch(dom);
+  ctx.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({
+    headline: 'first', matches: [{ species: 'Cat', breed: 'A', why: 'x', effort: 'low', cost: 'low', watchOut: 'y' }],
+    considerations: ['one']
+  }) });
+  ctx.window.fetch = ctx.fetch;
+
+  pickAll(dom);
+  await dom.fire('match-form', 'submit');
+  ctx.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({
+    headline: 'second', matches: [{ species: 'Dog', breed: 'B', why: 'x', effort: 'high', cost: 'high', watchOut: 'y' }],
+    considerations: ['two', 'three']
+  }) });
+  ctx.window.fetch = ctx.fetch;
+  await dom.fire('match-form', 'submit');
+
+  check('match: resubmitting replaces the cards',
+    dom.nodes.get('match-list').children.length === 1,
+    dom.nodes.get('match-list').children.length + ' cards');
+  check('match: resubmitting replaces the considerations',
+    dom.nodes.get('match-considerations-list').children.length === 2,
+    dom.nodes.get('match-considerations-list').children.length + ' points');
+  check('match: resubmitting replaces the headline',
+    dom.nodes.get('match-headline').textContent === 'second',
+    dom.nodes.get('match-headline').textContent);
+}
+
+// 14. A missing AI key must say so rather than look like a broken page.
+{
+  const dom = makeMatchDom();
+  const ctx = loadMatch(dom);
+  ctx.fetch = () => Promise.resolve({
+    ok: false, status: 503,
+    json: () => Promise.resolve({ error: 'no key', code: 'ai_not_configured' })
+  });
+  ctx.window.fetch = ctx.fetch;
+
+  pickAll(dom);
+  await dom.fire('match-form', 'submit');
+
+  check('match: a missing key shows an error card',
+    !dom.nodes.get('match-error-card').classes.has('hidden'));
+  check('match: the message names the environment variable',
+    /LLM_API_KEY/.test(dom.nodes.get('match-error-detail').textContent),
+    dom.nodes.get('match-error-detail').textContent);
+  check('match: no results are shown on failure',
+    dom.nodes.get('match-results').classes.has('hidden'));
+  check('match: the submit button is usable again',
+    dom.nodes.get('match-submit').disabled === false);
+}
+
+}
+
+matchTests().then(function () {
+  console.log('\n' + (bad ? bad + ' runtime checks FAILED' : 'all runtime checks passed'));
+  process.exit(bad ? 1 : 0);
+}, function (err) {
+  console.log('FAIL  match harness threw -> ' + (err && err.message));
+  console.log('\n' + (bad + 1) + ' runtime checks FAILED');
+  process.exit(1);
+});

@@ -7,8 +7,9 @@
     "start": "node server.js",
     "check": "node scripts/check.js",
     "check:runtime": "node scripts/tracker-runtime.js",
+    "check:match": "node scripts/match/match-endpoint-runtime.js",
     "build": "node scripts/generate-breed-pages.js",
-    "test": "node scripts/check.js && node scripts/tracker-runtime.js"
+    "test": "node scripts/check.js && node scripts/tracker-runtime.js && node scripts/match/match-endpoint-runtime.js"
   },
   "dependencies": {
     "express": "^4.18.2",

@@ -637,6 +637,11 @@ ok('tracker is excluded from search indexing', /name="robots" content="noindex/.
 // Reachable from every page.
 ok('home page links to the tracker', /href="\/tracker\.html"/.test(html));
 ok('sources page links to the tracker', /href="\/tracker\.html"/.test(sourcesHtml));
+ok('the home page links to the matcher', /href="\/match\.html"/.test(html));
+// A footer link alone is easy to miss, so the matcher needs a real call to
+// action on the home page, above the fold and styled as the primary button.
+ok('the matcher is offered prominently on the home page',
+  /page-entry-links[\s\S]{0,400}?btn-primary[^"]*"[^>]*href="\/match\.html"/.test(html));
 const firstBreedDir = BREED_DIRS[0];
 const firstBreedPage = fs.readdirSync(path.join(ROOT, 'public', firstBreedDir))
   .filter((f) => f.endsWith('.html'))
@@ -811,6 +816,151 @@ ok('the review prompt caps the headline', /max 90 characters/.test(reviewPrompt)
 ok('the review prompt forbids inventing numbers', /Never invent numbers/.test(reviewPrompt));
 ok('the review prompt says it is not a vet', /not a vet/.test(reviewPrompt));
 ok('the review prompt is species aware', /fish tank has no walk/i.test(reviewPrompt));
+
+// ---------------------------------------------------------------- match
+section('Pet match page');
+
+const matchHtml = read('public/match.html');
+const matchJs = read('public/match.js');
+
+ok('there is a match page', matchHtml.length > 500);
+ok('the match page is not indexed', /name="robots" content="noindex/.test(matchHtml));
+ok('the match page skips to the form', /skip-link" href="#match-main"/.test(matchHtml));
+
+// Every question the server validates must exist on the page, with the same
+// values. If these drift apart the form collects answers the server rejects.
+const matchKeys = ['home', 'outdoor', 'hoursAlone', 'activity', 'experience', 'household',
+  'space', 'noiseTolerance', 'grooming', 'budget', 'time', 'reason'];
+matchKeys.forEach((key) => {
+  ok('the page asks "' + key + '"', new RegExp('name="' + key + '"').test(matchHtml));
+});
+ok('the match form has 12 radio groups', (matchHtml.match(/type="radio"/g) || []).length >= 40);
+ok('every question group is a fieldset with a legend',
+  (matchHtml.match(/<fieldset class="match-question">/g) || []).length === 12 &&
+  (matchHtml.match(/<legend class="match-question-title">/g) || []).length === 12);
+
+// Client and server must agree on the allowed vocabulary, or a valid answer is
+// rejected or an invalid one slips through.
+const serverQs = (server.match(/const MATCH_QUESTIONS = \{([\s\S]*?)\n\};/) || [])[1] || '';
+matchKeys.forEach((key) => {
+  const serverList = (serverQs.match(new RegExp(key + ":\\s*\\[([^\\]]*)\\]")) || [])[1] || '';
+  const serverValues = (serverList.match(/'[^']+'/g) || []).map((v) => v.replace(/'/g, ''));
+  const jsBlock = (matchJs.match(new RegExp(key + ":\\s*\\[([^\\]]*)\\]")) || [])[1] || '';
+  const jsValues = (jsBlock.match(/'[^']+'/g) || []).map((v) => v.replace(/'/g, ''));
+  const htmlValues = (matchHtml.match(new RegExp('name="' + key + '" value="([^"]+)"', 'g')) || [])
+    .map((tag) => (tag.match(/value="([^"]+)"/) || [])[1]);
+  ok('"' + key + '" offers exactly the options the server allows',
+    htmlValues.length === serverValues.length &&
+    htmlValues.every((v, i) => v === serverValues[i]) && htmlValues.length > 0,
+    htmlValues.join(',') + ' vs ' + serverValues.join(','));
+  ok('"' + key + '" has the same options on both sides',
+    serverValues.length > 0 && serverValues.join(',') === jsValues.join(','),
+    'server ' + serverValues.join(',') + ' vs client ' + jsValues.join(','));
+  // And every option must be a real radio input on the page.
+  serverValues.forEach((value) => {
+    ok('the page offers ' + key + '=' + value,
+      new RegExp('name="' + key + '" value="' + value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"').test(matchHtml));
+  });
+});
+
+ok('there is a match route', /app\.post\('\/api\/pet-match'/.test(server));
+ok('the match route is not the review route',
+  !/app\.post\('\/api\/pet-match[\s\S]{0,40}tracker-review/.test(server));
+
+// The model must be told to be honest rather than agreeable, and must not be
+// allowed to invent species or push a purchase.
+const matchPrompt = (server.match(/const MATCH_SYSTEM_PROMPT = `([\s\S]*?)`;/) || [])[1] || '';
+ok('the match prompt exists', matchPrompt.length > 200, matchPrompt.length + ' chars');
+ok('the match prompt demands JSON only', /ONLY valid JSON/.test(matchPrompt));
+['headline', 'matches', 'species', 'breed', 'why', 'effort', 'cost', 'watchOut', 'considerations']
+  .forEach((field) => {
+    ok('the match prompt asks for "' + field + '"', matchPrompt.includes('"' + field + '"'));
+  });
+ok('the match prompt limits the species list',
+  /Only use species from this list/.test(matchPrompt));
+ok('the match prompt forbids inventing a breed', /Never invent a breed/.test(matchPrompt));
+ok('the match prompt allows pushback', /sometimes discouraging/.test(matchPrompt));
+ok('the match prompt forbids flattery', /Never flatter them/.test(matchPrompt));
+ok('the match prompt refuses the easy framing',
+  /Do not describe any animal as easy, low maintenance or a gift/.test(matchPrompt));
+ok('the match prompt states the length of the commitment',
+  /10 to 30 year commitment/.test(matchPrompt));
+ok('the match prompt prefers rescue animals', /Prefer rescue and shelter animals/.test(matchPrompt));
+ok('the match prompt forbids price figures', /Keep cost as a rating, not a number/.test(matchPrompt));
+ok('the match prompt warns about unsafe household combinations',
+  /unsafe for the household/.test(matchPrompt));
+
+// Validation: every answer must be a known key with a known value.
+ok('match validation rejects a non-object body',
+  /function validateMatch[\s\S]*?if \(!body \|\| typeof body !== 'object'\)/.test(server));
+ok('match validation requires every question answered',
+  /const required = Object\.keys\(MATCH_QUESTIONS\)/.test(server));
+ok('match validation rejects unknown values',
+  /!MATCH_QUESTIONS\[key\]\.includes\(value\)/.test(server));
+ok('match validation rejects unexpected keys',
+  /Unexpected answer key/.test(server));
+
+// Normalisation: an unknown species must never reach the page.
+ok('match normalisation drops an unknown species',
+  /SPECIES\.includes\(item && item\.species\)/.test(server));
+ok('match normalisation keeps at most 3 matches', /slice\(0, 3\)/.test(server));
+ok('match normalisation caps effort and cost',
+  /MATCH_EFFORT\.includes/.test(server) && /MATCH_COST\.includes/.test(server));
+ok('match normalisation caps field lengths',
+  /clampText\(item && item\.why, 400\)/.test(server) &&
+  /clampText\(item && item\.watchOut, 220\)/.test(server));
+ok('an empty match list is an error, not an empty result',
+  /if \(!match\.matches\.length\)/.test(server));
+
+// The AI's text is rendered as text, never as markup.
+ok('the match page never assigns AI text as HTML',
+  !/innerHTML/.test(matchJs));
+ok('the match page clears previous results before rendering',
+  /list\.textContent = ''/.test(matchJs));
+ok('the match page builds cards with createElement', /document\.createElement\('article'\)/.test(matchJs));
+ok('the match page builds points with textContent',
+  /li\.textContent = item/.test(matchJs));
+ok('the match page clears old considerations before adding',
+  /considerationsList\.textContent = ''/.test(matchJs));
+
+// A missing answer must be refused before paying for a request.
+ok('the form checks every question before submitting',
+  /result\.missing\.length/.test(matchJs));
+ok('a missing answer names the question number',
+  /missing\.push\('Question ' \+ NUMBERING\[key\]\)/.test(matchJs));
+ok('the missing-answer message joins them', /result\.missing\.join/.test(matchJs));
+ok('the button reports progress while waiting', /Thinking/.test(matchJs));
+ok('a missing AI key is explained plainly',
+  /ai_not_configured/.test(matchJs) && /LLM_API_KEY/.test(matchJs));
+ok('a network failure is handled', /Could not reach the server/.test(matchJs));
+
+// The chosen answer must be visible, not just checked.
+ok('a chosen answer is highlighted', /\.choice\.is-selected/.test(css));
+ok('the page marks choices on change', /addEventListener\('change', markChoices\)/.test(matchJs));
+// markChoices is called once at load and again on every submit, so a page that
+// never touches a radio still shows no false highlight and a submit always
+// reflects what is actually checked.
+const markCalls = (matchJs.match(/markChoices\(\);/g) || []).length;
+ok('choices are marked on load and on submit', markCalls >= 2, markCalls + ' calls');
+ok('markChoices toggles rather than adds unconditionally',
+  /classList\.toggle\('is-selected', Boolean\(input && input\.checked\)\)/.test(matchJs));
+
+// Match styling.
+['.match-card', '.match-rank', '.match-card-title', '.match-facts', '.match-watch-out', '.match-subtitle']
+  .forEach((cls) => {
+    ok('match styles ' + cls, new RegExp(cls.replace('.', '\\.') + '[ ,{]').test(css));
+  });
+ok('match questions use fieldsets', /\.match-question \{/.test(css));
+ok('the submit button can show a busy state', /\.btn\.is-busy|:disabled/.test(css));
+
+// Navigation: reachable from every page footer and from the home page.
+ok('the match page is linked in the home footer', /href="\/match\.html"/.test(html));
+ok('the match page is linked in the tracker footer',
+  /href="\/match\.html"/.test(read('public/tracker.html')));
+ok('the match page links back to the guide and tracker',
+  /href="\/"/.test(matchHtml) && /href="\/tracker\.html"/.test(matchHtml));
+ok('the tracker footer marks its own page', /tracker\.html" aria-current="page"/.test(read('public/tracker.html')));
+ok('the match page marks its own page', /match\.html" aria-current="page"/.test(matchHtml));
 
 // A blank day is unrecorded, not unfed. Without these the model reads a fresh
 // log as a week of missed feeding, which is the single most damaging thing it
