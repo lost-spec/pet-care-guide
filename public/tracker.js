@@ -398,12 +398,26 @@
         return { label: item.label, done: entry[item.key] === true };
       }),
       week: {
+        trackedDays: trackedDays(),
         fedDays: countDays(roleKey(petType, 'food')),
         activeDays: countDays(roleKey(petType, 'activity')),
         avgCalories: calorieAverage(),
         streak: fedStreak(petType)
       }
     };
+  }
+
+  // How many of the last 7 days have any entry at all. Without this the model
+  // cannot tell an unrecorded day from a day the pet was not fed, and reads a
+  // fresh log as a week of missed care.
+  function trackedDays() {
+    var petType = state.profile.petType;
+    var today = todayIso();
+    var total = 0;
+    for (var i = 0; i < 7; i++) {
+      if (entryTouched(state.entries[shiftIso(today, -i)], petType)) total++;
+    }
+    return total;
   }
 
   function countDays(key) {
@@ -571,6 +585,7 @@
     var hasAny = false;
     var fedDays = 0;
     var activeDays = 0;
+    var loggedDays = 0;
     var foodKey = roleKey(petType, 'food');
     var activityKey = roleKey(petType, 'activity');
 
@@ -578,7 +593,8 @@
     for (var i = 6; i >= 0; i--) {
       var iso = shiftIso(today, -i);
       var entry = state.entries[iso];
-      if (entryTouched(entry, petType)) hasAny = true;
+      var logged = entryTouched(entry, petType);
+      if (logged) { hasAny = true; loggedDays++; }
       if (foodKey && entry && entry[foodKey] === true) fedDays++;
       if (activityKey && entry && entry[activityKey] === true) activeDays++;
 
@@ -587,14 +603,17 @@
         if (entry && entry[dots[d].key] === true) {
           marks += '<span class="week-dot-on" aria-hidden="true">' + escapeHtml(dots[d].icon) + '</span>';
         } else {
-          marks += '<span class="week-dot" aria-hidden="true"></span>';
+          marks += '<span class="week-dot' + (logged ? '' : ' week-dot-void') + '" aria-hidden="true"></span>';
         }
       }
 
       var className = 'week-cell';
       if (iso === today) className += ' week-cell-today';
       if (iso === activeDate) className += ' week-cell-active';
-      var caption = labelFor(iso) + (entryTouched(entry, petType) ? ', logged' : ', nothing logged');
+      // Days the owner never opened must read as blank, not as a day where
+      // nothing was done.
+      if (!logged) className += ' week-cell-unrecorded';
+      var caption = labelFor(iso) + ', ' + (logged ? 'logged' : 'nothing recorded');
 
       cells +=
         '<button type="button" class="' + className + '" role="listitem" data-iso="' + iso + '"' +
@@ -610,10 +629,15 @@
     setShown(el.weekEmpty, !hasAny);
     setShown(el.weekStats, hasAny);
     if (hasAny) {
+      el.statLogged.textContent = String(loggedDays);
       el.statFed.textContent = String(fedDays);
       el.statExercise.textContent = String(activeDays);
       el.statCalories.textContent = String(calorieAverage());
       el.statStreak.textContent = String(fedStreak(petType));
+    }
+    if (el.weekNote) {
+      el.weekNote.textContent = loggedDays + ' of the last 7 days have an entry. ' +
+        'A day with no entry was not recorded, it does not mean care was missed.';
     }
 
     var target = Number(state.profile.calorieTarget);
@@ -777,9 +801,11 @@
       reviewLists: document.getElementById('review-lists'),
       reviewVet: document.getElementById('review-vet'),
       weekStrip: document.getElementById('week-strip'),
-      weekEmpty: document.getElementById('week-empty'),
-      weekStats: document.getElementById('week-stats'),
-      statFed: document.getElementById('stat-fed'),
+weekEmpty: document.getElementById('week-empty'),
+    weekNote: document.getElementById('week-note'),
+    weekStats: document.getElementById('week-stats'),
+    statLogged: document.getElementById('stat-logged'),
+    statFed: document.getElementById('stat-fed'),
       statExercise: document.getElementById('stat-exercise'),
       statExerciseBox: document.getElementById('stat-exercise-box'),
       statCalories: document.getElementById('stat-calories'),

@@ -223,6 +223,9 @@ Rules:
 - Use "concern" only for something that could harm the animal if it continues.
 - Judge the day against what is normal for that species, breed and life stage.
 - Never invent numbers. If calories are missing, work around it rather than guessing a figure.
+- A day with no entry in the log means the owner did not record that day. It does not mean the animal went unfed, unexercised or uncared for.
+- Only report a gap in care when the recorded days themselves show one: a recorded day ticking food, followed by later recorded days that do not.
+- Never tell the owner their animal has gone days without food, water or exercise. The log only covers days the owner actually entered.
 - Be concrete and calm. No scolding, no dramatics, no emoji.
 - You are not a vet. Anything medical goes in "vetNote".
 - Respect the animal's species. A fish tank has no walk and a rabbit does not need pellets as a main meal.`;
@@ -297,16 +300,26 @@ function buildReviewContext(body) {
 
   const week = body.week && typeof body.week === 'object' ? body.week : null;
   if (week) {
-    const bits = [];
+    const tracked = clampNumber(week.trackedDays, 0, 7);
     const fed = clampNumber(week.fedDays, 0, 7);
     const active = clampNumber(week.activeDays, 0, 7);
     const avg = clampNumber(week.avgCalories, 0, 5000);
     const streak = clampNumber(week.streak, 0, 400);
-    if (fed != null) bits.push(`${fed} of the last 7 days fed`);
-    if (active != null) bits.push(`${active} active`);
-    if (avg != null) bits.push(`averaging ${avg} kcal per logged day`);
-    if (streak != null) bits.push(`current fed streak ${streak} day(s)`);
-    if (bits.length) lines.push(`Last 7 days: ${bits.join(', ')}`);
+
+    // A day with no entry was never recorded, not missed. Telling the model
+    // "0 of the last 7 days fed" when the owner only started logging today
+    // reads as a week without food, which is both alarming and untrue, so how
+    // much of the window actually has data is stated before any counts.
+    if (tracked === 0) {
+      lines.push('Last 7 days: nothing recorded, so there is no history to judge.');
+    } else {
+      const bits = [`recorded on ${tracked} of the last 7 days`];
+      if (fed != null) bits.push(`${fed} of those recorded days ticked food`);
+      if (active != null) bits.push(`${active} of those recorded days ticked activity`);
+      if (avg != null) bits.push(`averaging ${avg} kcal per recorded day`);
+      if (streak != null) bits.push(`current fed streak ${streak} day(s)`);
+      lines.push(`Last 7 days: ${bits.join(', ')}`);
+    }
   }
 
   return lines.join('\n');

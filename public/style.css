@@ -1060,7 +1060,9 @@ a.btn-secondary { text-decoration: none; }
   gap: 0.45rem;
 }
 
-.week-day {
+/* Class names here come from tracker.js renderWeek(): week-cell, week-day,
+   week-date, week-dots, with -today, -active and -unrecorded modifiers. */
+.week-cell {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1075,14 +1077,21 @@ a.btn-secondary { text-decoration: none; }
   transition: border-color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-spring);
 }
 
-.week-day:hover { transform: translateY(-2px); border-color: var(--accent-soft); }
+.week-cell:hover { transform: translateY(-2px); border-color: var(--accent-soft); }
 
-.week-day.is-today {
+.week-cell-today {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent-soft);
 }
 
-.week-day-name {
+.week-cell-active { border-color: var(--accent-strong); }
+
+.week-cell:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.week-day {
   font-family: var(--font-display);
   font-size: 0.72rem;
   font-weight: 700;
@@ -1091,30 +1100,54 @@ a.btn-secondary { text-decoration: none; }
   color: var(--text-muted);
 }
 
-.week-day.is-today .week-day-name { color: var(--accent-strong); }
+.week-cell-today .week-day { color: var(--accent-strong); }
 
-.week-day-dots { display: flex; gap: 3px; }
-
-.week-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--hairline);
+.week-date {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-body);
 }
 
-.week-dot.is-on { background: var(--accent); }
+.week-dots { display: flex; gap: 3px; }
 
-.week-day-kcal {
-  font-size: 0.72rem;
-  font-variant-numeric: tabular-nums;
+.week-dot,
+.week-dot-on {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.week-dot { background: var(--hairline); }
+
+/* A tick is a glyph so it survives a forced-colours or high-contrast mode,
+   where a filled circle against a hairline is easy to miss. */
+.week-dot-on {
+  background: rgba(56, 142, 90, 0.18);
+  color: var(--accent-strong);
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+/* A day the owner never opened. It is drawn as an empty outline so it cannot be
+   read as a day where care was ticked and then missed. */
+.week-cell-unrecorded {
+  background: transparent;
+  border-style: dashed;
   color: var(--text-muted);
 }
 
-.week-empty {
+.week-dot-void { background: transparent; border: 1px solid var(--hairline); }
+
+.week-empty,
+.week-note {
   margin: 0.9rem 0 0;
   font-size: 0.88rem;
   color: var(--text-muted);
 }
+
+.week-note:empty { display: none; }
 
 .week-stats {
   display: grid;
@@ -1175,6 +1208,8 @@ a.btn-secondary { text-decoration: none; }
   .tracker-grid-date { grid-template-columns: 1fr; }
   .week-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .tracker-weight { grid-template-columns: 1fr; }
+  .week-stats { grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); }
+  .week-stat-value { font-size: 1.15rem; }
 }
 
 /* ---------- 7. Sources ------------------------------------------------ */

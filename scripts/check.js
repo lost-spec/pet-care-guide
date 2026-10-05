@@ -812,6 +812,44 @@ ok('the review prompt forbids inventing numbers', /Never invent numbers/.test(re
 ok('the review prompt says it is not a vet', /not a vet/.test(reviewPrompt));
 ok('the review prompt is species aware', /fish tank has no walk/i.test(reviewPrompt));
 
+// A blank day is unrecorded, not unfed. Without these the model reads a fresh
+// log as a week of missed feeding, which is the single most damaging thing it
+// can tell someone about their own pet.
+ok('the review prompt says a blank day is unrecorded, not unfed',
+  /does not mean the animal went unfed/.test(reviewPrompt));
+ok('the review prompt forbids reporting missed food',
+  /Never tell the owner their animal has gone days without food/.test(reviewPrompt));
+ok('the review prompt demands a gap be shown by recorded days',
+  /Only report a gap in care when the recorded days themselves show one/.test(reviewPrompt));
+ok('the review prompt states how much of the window was recorded',
+  /recorded on \$\{tracked\} of the last 7 days/.test(server));
+ok('the review prompt has a distinct line for an empty window',
+  /nothing recorded, so there is no history to judge/.test(server));
+ok('the prompt never says "0 of the last 7 days fed"',
+  !/\$\{fed\} of the last 7 days fed/.test(server),
+  'that phrasing reads as a week of starvation when the owner just started');
+ok('the review payload carries trackedDays', /trackedDays:\s*trackedDays\(\)/.test(trackerJs));
+ok('the payload clamps trackedDays to the window', /clampNumber\(week\.trackedDays, 0, 7\)/.test(server));
+
+// The week strip has to distinguish a day nobody logged from a day with no ticks.
+ok('unrecorded days get their own class', /week-cell-unrecorded/.test(trackerJs));
+ok('unrecorded days are styled apart from unticked days',
+  /\.week-cell-unrecorded \{[^}]*border-style:\s*dashed/.test(css));
+ok('week note explains a blank day',
+  /id="week-note"/.test(trackerHtml) &&
+  /not recorded, it does not mean care was missed/.test(trackerJs));
+ok('days recorded stat exists', /id="stat-logged"/.test(trackerHtml));
+ok('day captions say nothing recorded', /nothing recorded/.test(trackerJs));
+ok('captions no longer say nothing logged', !/, nothing logged/.test(trackerJs));
+
+// renderWeek writes .week-cell/.week-day/.week-dots, so the CSS has to use the
+// same names or the whole strip renders unstyled.
+['week-cell', 'week-day', 'week-date', 'week-dots', 'week-dot-on'].forEach((cls) => {
+  ok('the week strip styles .' + cls, new RegExp('\\.' + cls + '[ ,{]').test(css));
+});
+ok('no stale .week-day.is-today left over', !/\.week-day\.is-today/.test(css));
+ok('no stale .week-dot.is-on left over', !/\.week-dot\.is-on/.test(css));
+
 // Validation must reject junk before it reaches a prompt.
 const Validation = (() => {
   const src = server.match(/(function validateReview[\s\S]*?\n}\n)/);

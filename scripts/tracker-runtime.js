@@ -189,5 +189,114 @@ const PET_KEY = 'petCareGuide.pet.v1';
   check('tick: survives a reload', reloaded && reloaded.checked === true);
 }
 
+const TRACK_KEY = 'petCareGuide.tracker.v1';
+
+// How many of the last 7 days have an entry, counted from the real rendered
+// stats rather than a reimplementation, so a future refactor cannot quietly
+// change the meaning without breaking here.
+function recordedFrom(dom, id) { return Number(dom.nodes.get(id).textContent); }
+
+// 6. A brand new log must not look like a week of neglect. One ticked day in
+//    the window has to count as 1 recorded day, and the six days the owner
+//    never opened have to be marked unrecorded rather than simply unticked.
+{
+  const store = { [PET_KEY]: JSON.stringify({ petType: 'Dog', breed: 'Poodle', ageStage: 'Adult (1-5 years)' }) };
+  const { dom } = load(store);
+  const fed = dom.document.querySelectorAll('input[type=checkbox]').find((c) => c.id === 'chk-fed');
+  fed.checked = true;
+  dom.fire('checklist', 'change');
+
+  check('coverage: one ticked day records 1 day',
+    dom.nodes.get('stat-logged').textContent === '1', dom.nodes.get('stat-logged').textContent);
+  check('coverage: days fed is 1, not 0',
+    dom.nodes.get('stat-fed').textContent === '1', dom.nodes.get('stat-fed').textContent);
+  check('coverage: note explains a blank day',
+    /not recorded/i.test(dom.nodes.get('week-note').textContent), dom.nodes.get('week-note').textContent);
+
+  const html = dom.nodes.get('week-strip').innerHTML;
+  const cells = html.match(/class="week-cell[^"]*"/g) || [];
+  check('coverage: all seven days shown', cells.length === 7, cells.length + ' cells');
+  check('coverage: six days marked unrecorded',
+    (html.match(/week-cell-unrecorded/g) || []).length === 6,
+    (html.match(/week-cell-unrecorded/g) || []).length + ' unrecorded');
+  check('coverage: the ticked day is not marked unrecorded',
+    cells.filter((c) => /week-cell-unrecorded/.test(c)).length === 6);
+  check('coverage: blank days say nothing recorded',
+    /nothing recorded/.test(html) && !/nothing logged/.test(html));
+}
+
+// 7. The review payload has to carry how much of the window was actually
+//    recorded, or the model reads a logging gap as missed care.
+{
+  const store = { [PET_KEY]: JSON.stringify({ petType: 'Dog', breed: 'Poodle', ageStage: 'Adult (1-5 years)' }) };
+  const { dom, ctx } = load(store);
+  dom.document.querySelectorAll('input[type=checkbox]').find((c) => c.id === 'chk-fed').checked = true;
+  dom.fire('checklist', 'change');
+
+  const seen = [];
+  ctx.fetch = (url, opts) => {
+    seen.push(JSON.parse(opts.body));
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({
+      verdict: 'good', headline: 'ok', positives: ['x'], concerns: [], tips: ['y'], vetNote: '' }) });
+  };
+  ctx.window.fetch = ctx.fetch;
+  dom.fire('review-btn', 'click');
+
+  check('review: request sent', seen.length === 1, seen.length + ' requests');
+  const week = seen[0] && seen[0].week;
+  check('review: payload carries trackedDays', week && week.trackedDays === 1,
+    week && JSON.stringify(week));
+  check('review: payload carries fedDays', week && week.fedDays === 1,
+    week && JSON.stringify(week));
+}
+
+// 8. trackedDays has to count days, not just today's entry, and it must not
+//    exceed the 7 day window however much history has piled up.
+{
+  function isoBack(days) {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return d.toISOString().slice(0, 10);
+  }
+  const entries = {};
+  for (let i = 0; i < 3; i++) entries[isoBack(i)] = { fed: true };
+  for (let i = 3; i < 20; i++) entries[isoBack(i)] = { fed: true };
+
+  const store = {
+    [PET_KEY]: JSON.stringify({ petType: 'Dog', breed: 'Poodle', ageStage: 'Adult (1-5 years)' }),
+    [TRACK_KEY]: JSON.stringify({
+      version: 1,
+      profile: { petType: 'Dog', breed: 'Poodle', ageStage: 'Adult (1-5 years)', diet: '', calorieTarget: '' },
+      entries
+    })
+  };
+  const { dom, ctx } = load(store);
+
+  check('window: recorded days capped at 7', recordedFrom(dom, 'stat-logged') === 7,
+    recordedFrom(dom, 'stat-logged') + ' recorded');
+  check('window: days fed capped at 7', recordedFrom(dom, 'stat-fed') === 7,
+    recordedFrom(dom, 'stat-fed') + ' fed');
+  check('window: no cell is unrecorded when the week is full',
+    (dom.nodes.get('week-strip').innerHTML.match(/week-cell-unrecorded/g) || []).length === 0,
+    (dom.nodes.get('week-strip').innerHTML.match(/week-cell-unrecorded/g) || []).length + ' unrecorded');
+  check('window: note says 7 of 7', /^7 of the last 7 days/.test(dom.nodes.get('week-note').textContent),
+    dom.nodes.get('week-note').textContent);
+
+  // Only three of those days are inside the window that the payload reports.
+  const seen = [];
+  ctx.fetch = (url, opts) => {
+    seen.push(JSON.parse(opts.body));
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({
+      verdict: 'good', headline: 'ok', positives: ['x'], concerns: [], tips: ['y'], vetNote: '' }) });
+  };
+  ctx.window.fetch = ctx.fetch;
+  dom.fire('review-btn', 'click');
+  const week = seen[0] && seen[0].week;
+  check('window: payload agrees the window holds 7 recorded days',
+    week && week.trackedDays === 7, week && JSON.stringify(week));
+  check('window: payload never exceeds the window',
+    week && week.trackedDays <= 7 && week.fedDays <= 7, week && JSON.stringify(week));
+}
+
 console.log('\n' + (bad ? bad + ' runtime checks FAILED' : 'all runtime checks passed'));
 process.exit(bad ? 1 : 0);
